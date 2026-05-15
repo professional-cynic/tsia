@@ -1,0 +1,27 @@
+[package]
+name = "tsia"
+version = "0.1.0"
+description = "Toni's Simple Image Annotator"
+authors = ["professional-cynic"]
+license = "AGPL-3.0"
+edition = "2021"
+
+[lib]
+name = "tsia_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = "2"
+
+[dependencies]
+tauri = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "fs", "io-util", "sync", "macros"] }
+imagesize = "0.14"
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2"
