@@ -1,0 +1,2443 @@
+<!DOCTYPE html>
+<!--
+  Toni's Simple Image Annotator (TSIA)
+  © 2026 professional-cynic — https://codeberg.org/professional-cynic
+  Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0)
+  https://www.gnu.org/licenses/agpl-3.0.html
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toni's Simple Image Annotator</title>
+<style>
+/*
+ * Toni's Simple Image Annotator (TSIA)
+ * © 2026 professional-cynic — https://codeberg.org/professional-cynic
+ * AGPL-3.0 — https://www.gnu.org/licenses/agpl-3.0.html
+ */
+
+/* ══════════════════════════════════════════════════════
+   TOKENS
+══════════════════════════════════════════════════════ */
+:root {
+  --bg:      #0f1117;
+  --bg2:     #171b26;
+  --bg3:     #1e2435;
+  --border:  #2a2f42;
+  --text:    #e8eaf0;
+  --text2:   #8b92a8;
+  --accent:  #4f8ef7;
+  --success: #3ecf7a;
+  --danger:  #f75f5f;
+  --warn:    #f7a94f;
+  --radius:  6px;
+  --font:    'JetBrains Mono', 'Fira Mono', monospace;
+}
+
+/* CLASS COLOURS — up to 9 classes */
+:root {
+  --c0: #4f8ef7; --c1: #3ecf7a; --c2: #f75f5f; --c3: #f7a94f;
+  --c4: #c084fc; --c5: #22d3ee; --c6: #fb923c; --c7: #a3e635; --c8: #f472b6;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ══════════════════════════════════════════════════════
+   SCREENS
+══════════════════════════════════════════════════════ */
+.screen { display: none; flex-direction: column; height: 100vh; overflow-y: auto; }
+.screen.active { display: flex; }
+
+/* ══════════════════════════════════════════════════════
+   SHARED COMPONENTS
+══════════════════════════════════════════════════════ */
+.topbar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.topbar-title { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: 0.05em; }
+.topbar-spacer { flex: 1; }
+
+button {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button:disabled { opacity: .4; cursor: default; }
+.btn-primary  { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #6aa3ff; border-color: #6aa3ff; color: #fff; }
+.btn-danger   { background: transparent; border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+.btn-success  { background: var(--success); border-color: var(--success); color: #000; }
+.btn-success:hover:not(:disabled) { background: #5de89a; }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+
+input[type=text], input[type=number], select, textarea {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  font-family: var(--font);
+  font-size: 12px;
+  outline: none;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+
+.hint { font-size: 10px; color: var(--text2); margin-top: 3px; }
+
+kbd {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
+  color: var(--text2);
+}
+
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.card-title { font-size: 12px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 12px; }
+
+.form-row { margin-bottom: 12px; }
+.form-row label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .06em; }
+
+/* ══════════════════════════════════════════════════════
+   HOME SCREEN
+══════════════════════════════════════════════════════ */
+#screen-home {
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+}
+.home-logo { font-size: 28px; font-weight: 800; letter-spacing: .1em; color: var(--accent); }
+.home-sub  { font-size: 12px; color: var(--text2); text-align: center; max-width: 420px; line-height: 1.6; }
+.home-actions { display: flex; gap: 10px; }
+.home-footer { margin-top: 32px; font-size: 10px; color: var(--text2); text-align: center; }
+.home-footer a { color: var(--text2); text-decoration: underline; }
+.home-footer a:hover { color: var(--text); }
+
+/* ══════════════════════════════════════════════════════
+   PROJECTS SCREEN
+══════════════════════════════════════════════════════ */
+#screen-projects .inner { max-width: 860px; margin: 0 auto; padding: 24px; width: 100%; }
+.project-item {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.project-info { flex: 1; }
+.project-name { font-weight: 700; font-size: 13px; }
+.project-detail { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.project-actions { display: flex; gap: 6px; }
+
+/* ══════════════════════════════════════════════════════
+   NEW PROJECT SCREEN
+══════════════════════════════════════════════════════ */
+#screen-new .inner { max-width: 600px; margin: 0 auto; padding: 24px; width: 100%; }
+.class-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.class-swatch {
+  width: 14px; height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.class-row input { flex: 1; }
+.class-row .btn-sm { flex-shrink: 0; }
+
+/* ══════════════════════════════════════════════════════
+   ANNOTATE SCREEN
+══════════════════════════════════════════════════════ */
+#screen-annotate {
+  flex-direction: row;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Left sidebar */
+.ann-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ann-sidebar-section {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.ann-sidebar-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 8px;
+}
+.collapsible-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+.collapse-arrow {
+  display: inline-block;
+  font-size: 9px;
+  transition: transform .15s;
+}
+.collapsible.collapsed .collapse-arrow { transform: rotate(-90deg); }
+.collapsible.collapsed .collapsible-body { display: none; }
+.class-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  transition: background .1s, border-color .1s;
+}
+.class-btn:hover { background: var(--bg3); }
+.class-btn.active { background: var(--bg3); border-left-color: var(--accent); }
+.class-btn .swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.class-btn .shortcut { margin-left: auto; font-size: 9px; color: var(--text2); flex-shrink: 0; }
+.class-btn .cls-del {
+  display: none;
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.class-btn:hover .shortcut { display: none; }
+.class-btn:hover .cls-del { display: block; }
+.class-btn .cls-del:hover { color: var(--danger); }
+
+/* Image list */
+.img-list { flex: 1; overflow-y: auto; padding: 6px; }
+.img-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text2);
+  border: 1px solid transparent;
+  transition: background .1s;
+  margin-bottom: 2px;
+}
+.img-item:hover { background: var(--bg3); }
+.img-item.active { background: var(--bg3); border-color: var(--accent); color: var(--text); }
+.img-item.out-of-filter { border-color: var(--warn); }
+.img-item .ann-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--border);  /* grey — untouched */
+}
+.img-item .ann-dot.reviewed { background: var(--success); }  /* green — done */
+.img-item .ann-dot.needs-review { background: var(--warn); } /* orange — come back */
+.img-item .img-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.img-item .img-idx { font-size: 10px; color: var(--text2); flex-shrink: 0; }
+
+/* Canvas area */
+.ann-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.ann-toolbar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.ann-toolbar .sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+.ann-toolbar .info { font-size: 11px; color: var(--text2); white-space: nowrap; }
+
+.canvas-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  background: #080a0f;
+}
+#ann-canvas {
+  display: block;
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.canvas-placeholder {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text2);
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 2;
+  display: none;
+}
+
+/* Right panel — box list */
+.ann-right {
+  width: 200px;
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+.ann-right-title {
+  padding: 10px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.box-list { flex: 1; overflow-y: auto; padding: 6px; }
+.box-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  margin-bottom: 2px;
+  cursor: pointer;
+  transition: background .1s;
+}
+.box-item:hover { background: var(--bg3); }
+.box-item.selected { background: var(--bg3); border-color: var(--accent); }
+.box-item .b-swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.box-item .b-label { flex: 1; font-size: 11px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.box-item .b-dims { font-size: 9px; color: var(--text2); flex-shrink: 0; white-space: nowrap; }
+.box-item .b-del { color: var(--text2); font-size: 13px; line-height: 1; padding: 0 2px; background: none; border: none; cursor: pointer; }
+.box-item .b-del:hover { color: var(--danger); }
+
+/* Right panel action buttons */
+.ann-right-actions {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.ann-right-actions .btn-sm { flex: 1; min-width: 0; text-align: center; }
+
+/* Shortcuts toggle — bottom-left of canvas area */
+.shortcuts-toggle {
+  position: absolute;
+  bottom: 12px;
+  left: 230px; /* sidebar width + margin */
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text2);
+  font-size: 14px;
+  font-style: italic;
+  font-family: Georgia, serif;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 11;
+  opacity: 0.5;
+}
+.shortcuts-toggle:hover { opacity: 1; color: var(--text); border-color: var(--text2); }
+
+/* Shortcuts overlay */
+.shortcuts-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.shortcuts-overlay.visible { display: flex; }
+.shortcuts-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 2.2;
+  max-width: 380px;
+}
+.shortcuts-card kbd { font-size: 10px; }
+
+/* Progress bar */
+.progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 220px; /* sidebar width */
+  right: 200px; /* right panel width */
+  height: 3px;
+  background: var(--bg3);
+  z-index: 10;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+  width: 0;
+}
+
+/* ══════════════════════════════════════════════════════
+   SCROLLBAR
+══════════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text2); }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════
+     SCREEN: HOME
+══════════════════════════════════════════════════════ -->
+<div id="screen-home" class="screen active">
+  <div class="home-logo">TONI'S SIMPLE IMAGE ANNOTATOR</div>
+  <div class="home-sub">Browser-based bounding box annotation with COCO and YOLO import/export. No server required.</div>
+  <div class="home-actions">
+    <button class="btn-primary" onclick="showScreen('new')">+ New Project</button>
+    <button onclick="importNewProjectJSON()">Import Project JSON</button>
+    <button onclick="showScreen('projects')">Open Projects</button>
+  </div>
+  <div class="home-footer">
+    © 2026 <a href="https://codeberg.org/professional-cynic" target="_blank">professional-cynic</a> · Licensed under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank">AGPL-3.0</a>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SCREEN: NEW PROJECT
+══════════════════════════════════════════════════════ -->
+<div id="screen-new" class="screen">
+  <div class="topbar">
+    <span class="topbar-title">New Project</span>
+    <span class="topbar-spacer"></span>
+    <button onclick="showScreen('projects')">Cancel</button>
+  </div>
+  <div class="inner">
+    <div class="card">
+      <div class="card-title">Project Details</div>
+      <div class="form-row">
+        <label>Project Name</label>
+        <input type="text" id="new-project-name" placeholder="e.g. Pipe_A defects">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Images</div>
+      <button onclick="loadNewProjectFolder()" id="btn-load-folder">Load Image Folder</button>
+      <div id="new-folder-status" style="margin-top:8px; font-size:11px; color:var(--text2);"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Import Annotations (optional)</div>
+      <div class="hint" style="margin-bottom:6px;">Import before editing classes — COCO/YOLO will auto-populate them.</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button onclick="importCOCO()" id="btn-import-coco">Import COCO JSON</button>
+        <button onclick="importYOLO()" id="btn-import-yolo">Import YOLO (folder of .txt)</button>
+      </div>
+      <div id="import-status" style="margin-top:8px; font-size:11px; color:var(--text2);"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Classes</div>
+      <div id="classes-list"></div>
+      <button class="btn-sm" onclick="addClassRow()" style="margin-top:4px;">+ Add Class</button>
+      <div class="hint" style="margin-top:8px;">Up to 9 classes. Order determines Ctrl+1 … Ctrl+9 shortcuts.</div>
+    </div>
+
+    <button class="btn-primary" id="btn-create-project" onclick="createProject()" disabled>Create Project</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SCREEN: PROJECTS
+══════════════════════════════════════════════════════ -->
+<div id="screen-projects" class="screen">
+  <div class="topbar">
+    <span class="topbar-title">Projects</span>
+    <span class="topbar-spacer"></span>
+    <button class="btn-primary" onclick="showScreen('new')">+ New Project</button>
+    <button onclick="importNewProjectJSON()">Import Project JSON</button>
+    <button onclick="showScreen('home')">Home</button>
+  </div>
+  <div class="inner" style="max-width:860px; margin:0 auto; padding:24px; width:100%;">
+    <div id="projects-list"></div>
+    <div id="projects-empty" style="display:none; color:var(--text2); text-align:center; padding:40px;">No projects yet. Create one to get started.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SCREEN: ANNOTATE
+══════════════════════════════════════════════════════ -->
+<div id="screen-annotate" class="screen">
+
+  <!-- Left sidebar -->
+  <div class="ann-sidebar">
+    <div class="ann-sidebar-section" style="padding:7px 12px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+        <div class="ann-sidebar-title" style="margin-bottom:0;">Project</div>
+        <button class="btn-sm" onclick="showScreen('projects')">← Back</button>
+      </div>
+      <div id="ann-project-name" style="font-size:12px; font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>
+      <a href="#" onclick="event.preventDefault(); reloadFolder();" style="font-size:9px; color:var(--text2); text-decoration:underline;">Reload folder</a>
+    </div>
+
+    <div class="ann-sidebar-section collapsible">
+      <div class="ann-sidebar-title collapsible-toggle" onclick="this.parentElement.classList.toggle('collapsed')">
+        <span class="collapse-arrow">▾</span> Classes
+      </div>
+      <div class="collapsible-body">
+        <div id="ann-class-list"></div>
+        <button class="btn-sm" onclick="addProjectClass()" style="width:100%; margin-top:4px; font-size:11px;">+ Add class</button>
+      </div>
+    </div>
+
+    <div class="ann-sidebar-section collapsible" style="padding:8px 12px;">
+      <div class="ann-sidebar-title collapsible-toggle" onclick="this.parentElement.classList.toggle('collapsed')">
+        <span class="collapse-arrow">▾</span> Filters
+      </div>
+      <div class="collapsible-body">
+        <select id="filter-annotation" onchange="applyImageFilter()" style="margin-bottom:4px;">
+          <option value="all">All images</option>
+          <option value="annotated">Annotated</option>
+          <option value="unannotated">Unannotated</option>
+        </select>
+        <select id="filter-review" onchange="applyImageFilter()" style="margin-bottom:4px;">
+          <option value="all">Any review status</option>
+          <option value="reviewed">Reviewed</option>
+          <option value="unreviewed">Not reviewed</option>
+        </select>
+        <select id="filter-class" onchange="applyImageFilter()">
+          <option value="all">All classes</option>
+        </select>
+        <button class="btn-sm" onclick="toggleFilteredReviewed()" style="margin-top:6px; width:100%;">✓ Toggle reviewed</button>
+      </div>
+    </div>
+
+    <div class="ann-sidebar-title" style="padding:10px 12px 4px;">
+      Images (<span id="ann-img-count">0</span> shown)
+    </div>
+    <div class="img-list" id="ann-img-list"></div>
+  </div>
+
+  <!-- Main canvas area -->
+  <div class="ann-main">
+    <div class="ann-toolbar">
+      <span class="info" id="ann-img-label">No image loaded</span>
+      <span class="info" id="ann-zoom-label" style="margin-left:auto;">100%</span>
+      <button class="btn-sm" onclick="resetZoom()">Reset Zoom</button>
+    </div>
+    <div class="canvas-wrap" id="canvas-wrap">
+      <div class="canvas-placeholder" id="canvas-placeholder">Load a folder and select an image to begin</div>
+      <canvas id="ann-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="ann-right">
+    <!-- Action buttons -->
+    <div class="ann-right-actions">
+      <button class="btn-sm" id="btn-prev-img" onclick="navigateImage(-1)">← Prev</button>
+      <button class="btn-sm" id="btn-next-img" onclick="navigateImage(1)">→ Next</button>
+      <button class="btn-sm" onclick="undoAnnotation()" id="btn-undo-ann">↩ Undo</button>
+      <button class="btn-sm" onclick="deleteLastBox()" id="btn-del-box">✕ Del Last</button>
+    </div>
+
+    <!-- Box list -->
+    <div class="ann-right-title">Boxes (<span id="box-count">0</span>)</div>
+    <div class="box-list" id="box-list"></div>
+
+    <!-- Export -->
+    <div class="ann-right-actions" style="border-top:1px solid var(--border);">
+      <button class="btn-sm btn-success" onclick="exportCOCO()">COCO</button>
+      <button class="btn-sm btn-success" onclick="exportYOLO()">YOLO</button>
+      <button class="btn-sm" onclick="exportProjectJSON()">Save</button>
+    </div>
+  </div>
+
+  <!-- Help toggle — bottom-left of canvas -->
+  <button class="shortcuts-toggle" onclick="document.getElementById('shortcuts-overlay').classList.toggle('visible')">i</button>
+
+  <!-- Shortcuts overlay -->
+  <div id="shortcuts-overlay" class="shortcuts-overlay" onclick="this.classList.remove('visible')">
+    <div class="shortcuts-card" onclick="event.stopPropagation()">
+      <div style="font-weight:700; margin-bottom:8px; font-size:12px;">Keyboard Shortcuts</div>
+      <kbd>A</kbd> / <kbd>D</kbd> Prev / Next image<br>
+      <kbd>1</kbd>…<kbd>9</kbd> Set class (or reassign selected box)<br>
+      <kbd>C</kbd> Copy boxes from previous image<br>
+      <kbd>X</kbd> Mark as unreviewed<br>
+      <kbd>H</kbd> Toggle crosshair<br>
+      <kbd>Z</kbd> Undo<br>
+      <kbd>Del</kbd> Delete selected / last box<br>
+      <kbd>Esc</kbd> Deselect<br>
+      <kbd>Scroll</kbd> Zoom &nbsp; <kbd>Middle drag</kbd> Pan<br>
+      <kbd>?</kbd> Toggle this help
+
+      <div style="border-top:1px solid var(--border); margin-top:10px; padding-top:10px; font-weight:700; margin-bottom:6px; font-size:12px;">Image Status</div>
+      <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+        <span style="width:8px; height:8px; border-radius:50%; background:var(--border); flex-shrink:0;"></span> Not reviewed
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+        <span style="width:8px; height:8px; border-radius:50%; background:var(--success); flex-shrink:0;"></span> Reviewed
+      </div>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="width:8px; height:8px; border-radius:50%; background:var(--warn); flex-shrink:0;"></span> Needs re-review
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="progress-bar" id="progress-bar">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+
+</div>
+
+<script>
+// ── js/constants.js ──
+// ══════════════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════════════
+const STORAGE_KEY  = 'annotator_projects_v1';
+const IDB_NAME     = 'annotator_idb';
+const IDB_STORE    = 'dir_handles';
+const HANDLE_SIZE  = 7; // px on screen
+const MAX_UNDO     = 50;
+const MAX_NAV      = 100;
+const CLASS_COLORS = [
+  '#4f8ef7', '#3ecf7a', '#f75f5f', '#f7a94f',
+  '#c084fc', '#22d3ee', '#fb923c', '#a3e635', '#f472b6',
+];
+
+// ── js/utils.js ──
+// ══════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════
+
+function downloadJSON(obj, filename) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/** Load natural dimensions of an image from a FileSystemFileHandle. */
+async function loadImageDims(handle) {
+  const file = await handle.getFile();
+  const url  = URL.createObjectURL(file);
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload  = () => { URL.revokeObjectURL(url); resolve({ w: img.naturalWidth, h: img.naturalHeight }); };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+// ── js/state.js ──
+// ══════════════════════════════════════════════════════
+// STATE — single source of truth
+// ══════════════════════════════════════════════════════
+
+/** Persistent project data. */
+const state = {
+  projects:    [],
+  current:     null,   // active project object (ref into projects[])
+  fileHandles: {},     // filename → FileSystemFileHandle
+};
+
+/** Per-session annotation state (reset on project open). */
+const ann = {
+  imgIndex:    0,
+  zoom:        1,
+  offsetX:     0,
+  offsetY:     0,
+  activeClass: 0,
+  selectedBox: null,
+  drawing:     null,
+  drag:        null,
+  undoStack:   {},
+  nextBoxId:   1,
+  navBack:     [],
+  navForward:  [],
+  showCrosshair: false,
+};
+
+/** Reset annotation state for a new project open. */
+function resetAnn(project) {
+  ann.imgIndex    = 0;
+  ann.zoom        = 1;
+  ann.offsetX     = 0;
+  ann.offsetY     = 0;
+  ann.activeClass = 0;
+  ann.selectedBox = null;
+  ann.drawing     = null;
+  ann.drag        = null;
+  ann.undoStack   = {};
+  ann.nextBoxId   = project.nextBoxId || 1;
+  ann.navBack     = [];
+  ann.navForward  = [];
+}
+
+// ── js/storage.js ──
+// ══════════════════════════════════════════════════════
+// STORAGE — localStorage for projects, IndexedDB for dir handles
+// ══════════════════════════════════════════════════════
+
+// ── localStorage ──────────────────────────────────────
+
+function saveProjects() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.projects));
+  } catch (e) {
+    console.warn('Storage full — export JSON backup.', e);
+  }
+}
+
+function loadProjects() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) state.projects = JSON.parse(raw);
+  } catch {
+    state.projects = [];
+  }
+}
+
+// ── IndexedDB (directory handles) ─────────────────────
+
+function openIDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+async function saveDirHandle(projectId, handle) {
+  try {
+    const db = await openIDB();
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(handle, projectId);
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+    db.close();
+  } catch (e) {
+    console.warn('Could not save dir handle:', e);
+  }
+}
+
+async function loadDirHandle(projectId) {
+  try {
+    const db = await openIDB();
+    const handle = await new Promise((res, rej) => {
+      const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(projectId);
+      req.onsuccess = e => res(e.target.result);
+      req.onerror   = e => rej(e.target.error);
+    });
+    db.close();
+    return handle || null;
+  } catch {
+    return null;
+  }
+}
+
+// ── js/canvas.js ──
+// ══════════════════════════════════════════════════════
+// CANVAS — rendering, coordinate maths, hit testing
+// ══════════════════════════════════════════════════════
+
+const canvas = document.getElementById('ann-canvas');
+const ctx    = canvas.getContext('2d');
+let currentImage = null;
+
+function setCurrentImage(img) { currentImage = img; }
+
+// ── Coordinate conversion ─────────────────────────────
+
+function clientToImage(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  return [
+    (clientX - rect.left - ann.offsetX) / ann.zoom,
+    (clientY - rect.top  - ann.offsetY) / ann.zoom,
+  ];
+}
+
+function clampToImage(ix, iy) {
+  if (!currentImage) return [ix, iy];
+  return [
+    Math.max(0, Math.min(ix, currentImage.naturalWidth)),
+    Math.max(0, Math.min(iy, currentImage.naturalHeight)),
+  ];
+}
+
+function clampBox(box) {
+  if (!currentImage) return box;
+  const iw = currentImage.naturalWidth;
+  const ih = currentImage.naturalHeight;
+  let { x, y, w, h } = box;
+  if (x < 0) { w += x; x = 0; }
+  if (y < 0) { h += y; y = 0; }
+  if (x + w > iw) w = iw - x;
+  if (y + h > ih) h = ih - y;
+  if (w < 1) w = 1;
+  if (h < 1) h = 1;
+  return { x, y, w, h };
+}
+
+// ── Hit testing ───────────────────────────────────────
+
+function getHandlePositions(x, y, w, h) {
+  return [
+    [x,     y    ], [x+w/2, y    ], [x+w,   y    ],
+    [x,     y+h/2],                  [x+w,   y+h/2],
+    [x,     y+h  ], [x+w/2, y+h  ], [x+w,   y+h  ],
+  ];
+}
+
+function hitTestBox(ix, iy, box) {
+  return ix >= box.x && ix <= box.x + box.w &&
+         iy >= box.y && iy <= box.y + box.h;
+}
+
+function hitTestHandle(ix, iy, box) {
+  const positions = getHandlePositions(box.x, box.y, box.w, box.h);
+  const threshold = (HANDLE_SIZE / 2 + 2) / ann.zoom;
+  for (let i = 0; i < positions.length; i++) {
+    const [hx, hy] = positions[i];
+    if (Math.abs(ix - hx) <= threshold && Math.abs(iy - hy) <= threshold) return i;
+  }
+  return -1;
+}
+
+function applyHandleDrag(orig, handleIdx, dx, dy) {
+  let { x, y, w, h } = orig;
+  const top    = [0, 1, 2];
+  const bottom = [5, 6, 7];
+  const left   = [0, 3, 5];
+  const right  = [2, 4, 7];
+
+  if (left.includes(handleIdx))   { x += dx; w -= dx; }
+  if (right.includes(handleIdx))  { w += dx; }
+  if (top.includes(handleIdx))    { y += dy; h -= dy; }
+  if (bottom.includes(handleIdx)) { h += dy; }
+
+  if (w < 4) { if (left.includes(handleIdx)) x = orig.x + orig.w - 4; w = 4; }
+  if (h < 4) { if (top.includes(handleIdx))  y = orig.y + orig.h - 4; h = 4; }
+
+  return { x, y, w, h };
+}
+
+// ── Mouse position for crosshair ──────────────────────
+
+let mousePos = null; // { x, y } in canvas coords, null when outside
+
+function setMousePos(pos) { mousePos = pos; }
+
+// ── Rendering ─────────────────────────────────────────
+
+function resizeCanvas() {
+  const wrap = document.getElementById('canvas-wrap');
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+}
+
+let _renderPending = false;
+
+function render() {
+  if (_renderPending) return;
+  _renderPending = true;
+  requestAnimationFrame(_renderFrame);
+}
+
+function _renderFrame() {
+  _renderPending = false;
+  if (!currentImage) return;
+  const p   = state.current;
+  const img = p.images[ann.imgIndex];
+
+  resizeCanvas();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const ox = ann.offsetX, oy = ann.offsetY;
+  const z  = ann.zoom;
+  const dw = currentImage.naturalWidth  * z;
+  const dh = currentImage.naturalHeight * z;
+
+  ctx.drawImage(currentImage, ox, oy, dw, dh);
+
+  // Committed boxes
+  img.boxes.forEach(box => {
+    const isSelected = box.id === ann.selectedBox;
+    drawBox(box.x, box.y, box.w, box.h,
+            CLASS_COLORS[box.classIdx] || '#fff', isSelected,
+            p.classes[box.classIdx] || '');
+  });
+
+  // In-progress drawing
+  if (ann.drawing) {
+    const d = ann.drawing;
+    drawBox(d.x, d.y, d.w, d.h,
+            CLASS_COLORS[ann.activeClass] || '#fff', false, '', true);
+  }
+
+  // Crosshair
+  if (mousePos && ann.showCrosshair) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([4, 4]);
+    // Vertical line
+    ctx.beginPath();
+    ctx.moveTo(mousePos.x, 0);
+    ctx.lineTo(mousePos.x, canvas.height);
+    ctx.stroke();
+    // Horizontal line
+    ctx.beginPath();
+    ctx.moveTo(0, mousePos.y);
+    ctx.lineTo(canvas.width, mousePos.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawBox(ix, iy, iw, ih, color, selected, label, drawing = false) {
+  const z  = ann.zoom;
+  const ox = ann.offsetX, oy = ann.offsetY;
+  const sx = ox + ix * z, sy = oy + iy * z;
+  const sw = iw * z,      sh = ih * z;
+
+  // Outline
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = selected ? 2.5 : 1.5;
+  ctx.setLineDash(drawing ? [5, 3] : []);
+  ctx.strokeRect(sx, sy, sw, sh);
+  ctx.setLineDash([]);
+
+  // Semi-transparent fill
+  ctx.fillStyle = hexToRgba(color, selected ? 0.18 : 0.08);
+  ctx.fillRect(sx, sy, sw, sh);
+
+  // Class label
+  if (label && !drawing) {
+    ctx.font = `bold ${Math.max(10, 11 * z)}px JetBrains Mono, monospace`;
+    const tw = ctx.measureText(label).width;
+    const th = Math.max(10, 11 * z) + 4;
+    ctx.fillStyle = color;
+    ctx.fillRect(sx, sy - th, tw + 6, th);
+    ctx.fillStyle = '#000';
+    ctx.fillText(label, sx + 3, sy - 3);
+  }
+
+  // Dimensions label
+  if (selected || drawing) {
+    const dimText = `${Math.round(iw)}×${Math.round(ih)}`;
+    const dimFont = Math.max(9, 10 * z);
+    ctx.font = `${dimFont}px JetBrains Mono, monospace`;
+    const dtw = ctx.measureText(dimText).width;
+    const dth = dimFont + 3;
+    const dx = sx + sw - dtw - 4;
+    const dy = sy + sh + dth + 1;
+    ctx.fillStyle = hexToRgba('#000000', 0.6);
+    ctx.fillRect(dx - 2, dy - dth + 1, dtw + 4, dth);
+    ctx.fillStyle = color;
+    ctx.fillText(dimText, dx, dy - 2);
+  }
+
+  // Resize handles
+  if (selected) {
+    getHandlePositions(ix, iy, iw, ih).forEach(([hx, hy]) => {
+      const shx = ann.offsetX + hx * z;
+      const shy = ann.offsetY + hy * z;
+      ctx.fillStyle   = '#fff';
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 1.5;
+      ctx.fillRect(shx - HANDLE_SIZE / 2, shy - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
+      ctx.strokeRect(shx - HANDLE_SIZE / 2, shy - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
+    });
+  }
+}
+
+// ── Zoom helpers ──────────────────────────────────────
+
+function fitToView() {
+  if (!currentImage) return;
+  const wrap = document.getElementById('canvas-wrap');
+  const ww = wrap.clientWidth;
+  const wh = wrap.clientHeight;
+  const scale = Math.min(ww / currentImage.naturalWidth, wh / currentImage.naturalHeight);
+  ann.zoom = scale;
+  ann.offsetX = (ww - currentImage.naturalWidth  * scale) / 2;
+  ann.offsetY = (wh - currentImage.naturalHeight * scale) / 2;
+  updateZoomLabel();
+}
+
+function resetZoom() {
+  fitToView();
+  render();
+}
+
+function updateZoomLabel() {
+  document.getElementById('ann-zoom-label').textContent = Math.round(ann.zoom * 100) + '%';
+}
+
+// Expose for HTML onclick
+window.resetZoom = resetZoom;
+
+// ── js/boxes.js ──
+// ══════════════════════════════════════════════════════
+// BOXES — CRUD, selection, undo
+// ══════════════════════════════════════════════════════
+
+// ── Shared post-mutation refresh ──────────────────────
+
+function afterMutation() {
+  saveProjects();
+  renderBoxList();
+  renderImageList();
+  render();
+}
+
+// ── Undo ──────────────────────────────────────────────
+
+function pushUndo() {
+  const p   = state.current;
+  const img = p.images[ann.imgIndex];
+  const key = img.filename;
+  if (!ann.undoStack[key]) ann.undoStack[key] = [];
+  ann.undoStack[key].push(JSON.stringify(img.boxes));
+  if (ann.undoStack[key].length > MAX_UNDO) ann.undoStack[key].shift();
+}
+
+function undoAnnotation() {
+  const p = state.current;
+  if (!p) return;
+  const img = p.images[ann.imgIndex];
+  const key = img.filename;
+  if (!ann.undoStack[key] || ann.undoStack[key].length === 0) return;
+  img.boxes = JSON.parse(ann.undoStack[key].pop());
+  ann.selectedBox = null;
+  afterMutation();
+}
+
+// ── Delete ────────────────────────────────────────────
+
+function deleteBox(id) {
+  const p   = state.current;
+  const img = p.images[ann.imgIndex];
+  pushUndo();
+  img.boxes = img.boxes.filter(b => b.id !== id);
+  if (ann.selectedBox === id) ann.selectedBox = null;
+  afterMutation();
+}
+
+function deleteLastBox() {
+  const p = state.current;
+  if (!p) return;
+  const img = p.images[ann.imgIndex];
+  if (img.boxes.length === 0) return;
+  pushUndo();
+  const last = img.boxes[img.boxes.length - 1];
+  img.boxes.pop();
+  if (ann.selectedBox === last.id) ann.selectedBox = null;
+  afterMutation();
+}
+
+// ── Copy from previous ────────────────────────────────
+
+function copyBoxesFromPrevious() {
+  const p = state.current;
+  if (!p || ann.imgIndex === 0) return;
+  const prevImg = p.images[ann.imgIndex - 1];
+  if (prevImg.boxes.length === 0) return;
+  pushUndo();
+  const img = p.images[ann.imgIndex];
+  prevImg.boxes.forEach(box => {
+    img.boxes.push({
+      id: ann.nextBoxId++,
+      classIdx: box.classIdx,
+      x: box.x, y: box.y, w: box.w, h: box.h,
+    });
+  });
+  p.nextBoxId = ann.nextBoxId;
+  afterMutation();
+}
+
+// ── Reassign class ────────────────────────────────────
+
+function reassignBoxClass(classIdx) {
+  const p = state.current;
+  if (!p || ann.selectedBox === null) return false;
+  const img = p.images[ann.imgIndex];
+  const box = img.boxes.find(b => b.id === ann.selectedBox);
+  if (!box || box.classIdx === classIdx) return false;
+  pushUndo();
+  box.classIdx = classIdx;
+  saveProjects();
+  renderBoxList();
+  render();
+  return true;
+}
+
+// ── Mark as unreviewed ────────────────────────────────
+
+function unmarkReviewed() {
+  const p = state.current;
+  if (!p) return;
+  const img = p.images[ann.imgIndex];
+  img.reviewed = false;
+  saveProjects();
+  renderImageList();
+}
+
+// Expose for HTML onclick
+window.undoAnnotation       = undoAnnotation;
+window.deleteLastBox        = deleteLastBox;
+window.deleteBox            = deleteBox;
+window.reassignBoxClass     = reassignBoxClass;
+window.copyBoxesFromPrevious = copyBoxesFromPrevious;
+window.unmarkReviewed       = unmarkReviewed;
+
+// ── js/annotate-ui.js ──
+// ══════════════════════════════════════════════════════
+// ANNOTATE UI — sidebar, class list, image list, box list, filters
+// ══════════════════════════════════════════════════════
+
+// ── Class list ────────────────────────────────────────
+
+function setActiveClass(idx) {
+  ann.activeClass = idx;
+  document.querySelectorAll('.class-btn').forEach((b, i) =>
+    b.classList.toggle('active', i === idx));
+}
+
+// ── Image filter ──────────────────────────────────────
+
+/** Filter by annotation status and class only (for progress bar denominator). */
+function getBaseFilteredImages() {
+  const p      = state.current;
+  const annFil = document.getElementById('filter-annotation')?.value || 'all';
+  const clsFil = document.getElementById('filter-class')?.value     || 'all';
+
+  return p.images.map((img, i) => ({ img, i })).filter(({ img }) => {
+    if (annFil === 'annotated'   && img.boxes.length === 0) return false;
+    if (annFil === 'unannotated' && img.boxes.length  > 0) return false;
+    if (clsFil !== 'all') {
+      const ci = parseInt(clsFil);
+      if (!img.boxes.some(b => b.classIdx === ci)) return false;
+    }
+    return true;
+  });
+}
+
+/** Full filter including review status (for image list display). */
+function getFilteredImages() {
+  const revFil = document.getElementById('filter-review')?.value || 'all';
+  return getBaseFilteredImages().filter(({ img }) => {
+    if (revFil === 'reviewed'   && !img.reviewed) return false;
+    if (revFil === 'unreviewed' && img.reviewed)  return false;
+    return true;
+  });
+}
+
+function applyImageFilter() {
+  const filtered = getFilteredImages();
+  const currentInFilter = filtered.some(({ i }) => i === ann.imgIndex);
+  if (!currentInFilter && filtered.length > 0) {
+    const nearest = filtered.reduce((best, { i }) => {
+      const d = Math.abs(i - ann.imgIndex);
+      return d < best.d ? { d, i } : best;
+    }, { d: Infinity, i: filtered[0].i });
+    loadImage(nearest.i);
+    return;
+  }
+  renderImageList();
+}
+
+function populateClassFilter() {
+  const p  = state.current;
+  const el = document.getElementById('filter-class');
+  if (!el || !p) return;
+  el.innerHTML = '<option value="all">All classes</option>' +
+    p.classes.map((c, i) => `<option value="${i}">${c}</option>`).join('');
+}
+
+// ── Image list ────────────────────────────────────────
+
+function renderImageList() {
+  const p        = state.current;
+  const list     = document.getElementById('ann-img-list');
+  const filtered = getFilteredImages();
+
+  // Update progress bar — reviewed within annotation+class filter (ignoring review filter)
+  const baseFiltered = getBaseFilteredImages();
+  const reviewed  = baseFiltered.filter(({ img }) => img.reviewed === true).length;
+  const baseTotal = baseFiltered.length;
+  const pct       = baseTotal > 0 ? (reviewed / baseTotal * 100) : 0;
+  const fill = document.getElementById('progress-fill');
+  if (fill) fill.style.width = pct.toFixed(1) + '%';
+
+  const currentInFilter = filtered.some(({ i }) => i === ann.imgIndex);
+
+  // If filter is active but has no results, show empty message
+  const hasActiveFilter = (document.getElementById('filter-annotation')?.value || 'all') !== 'all'
+                       || (document.getElementById('filter-review')?.value || 'all') !== 'all'
+                       || (document.getElementById('filter-class')?.value || 'all') !== 'all';
+
+  if (filtered.length === 0 && hasActiveFilter) {
+    document.getElementById('ann-img-count').textContent = '0';
+    list.innerHTML = '<div style="padding:12px; font-size:11px; color:var(--text2); text-align:center;">No images match this filter.</div>';
+    return;
+  }
+
+  const visible = currentInFilter
+    ? filtered
+    : [...filtered, { img: p.images[ann.imgIndex], i: ann.imgIndex }]
+        .sort((a, b) => a.i - b.i);
+
+  document.getElementById('ann-img-count').textContent =
+    filtered.length + (currentInFilter ? '' : '*');
+
+  const prevScroll = list.scrollTop;
+
+  list.innerHTML = visible.map(({ img, i }) => {
+    const isCurrent   = i === ann.imgIndex;
+    const outOfFilter = isCurrent && !currentInFilter;
+    // Dot state: true=green (reviewed), false=orange (needs re-review), undefined=grey (untouched)
+    const dotClass = img.reviewed === true ? 'reviewed'
+                   : img.reviewed === false ? 'needs-review'
+                   : '';
+    return `<div class="img-item ${isCurrent ? 'active' : ''} ${outOfFilter ? 'out-of-filter' : ''}"
+                 onclick="loadImage(${i})"
+                 title="${img.filename}${outOfFilter ? ' (outside current filter)' : ''}">
+      <div class="ann-dot ${dotClass}"></div>
+      <span class="img-name">${img.filename}</span>
+      <span class="img-idx">${i + 1}</span>
+    </div>`;
+  }).join('');
+
+  list.scrollTop = prevScroll;
+
+  const active = list.querySelector('.img-item.active');
+  if (active) {
+    const itemTop    = active.offsetTop;
+    const itemBottom = itemTop + active.offsetHeight;
+    const listTop    = list.scrollTop;
+    const listBottom = listTop + list.clientHeight;
+    if (itemTop < listTop || itemBottom > listBottom) {
+      active.scrollIntoView({ block: 'nearest' });
+    }
+  }
+}
+
+// ── Box list (right panel) ────────────────────────────
+
+function renderBoxList() {
+  const p = state.current;
+  if (!p) return;
+  const img = p.images[ann.imgIndex];
+  document.getElementById('box-count').textContent = img.boxes.length;
+
+  document.getElementById('box-list').innerHTML = img.boxes.map((box, i) => {
+    const color = CLASS_COLORS[box.classIdx] || '#fff';
+    const label = p.classes[box.classIdx] || 'unknown';
+    const dims  = `${Math.round(box.w)}×${Math.round(box.h)}`;
+    return `<div class="box-item ${box.id === ann.selectedBox ? 'selected' : ''}" onclick="selectBox(${box.id})">
+      <div class="b-swatch" style="background:${color}"></div>
+      <span class="b-label">${i + 1}. ${label}</span>
+      <span class="b-dims">${dims}</span>
+      <button class="b-del" onclick="event.stopPropagation(); deleteBox(${box.id})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function selectBox(id) {
+  ann.selectedBox = id;
+  renderBoxList();
+  render();
+}
+
+// ── Full annotate screen render ───────────────────────
+
+function renderAnnotateUI() {
+  const p = state.current;
+  if (!p) return;
+
+  document.getElementById('ann-project-name').textContent = p.name;
+  document.getElementById('canvas-placeholder').style.display = currentImage ? 'none' : 'block';
+
+  populateClassFilter();
+
+  const cl = document.getElementById('ann-class-list');
+  cl.innerHTML = p.classes.map((c, i) => `
+    <button class="class-btn ${i === ann.activeClass ? 'active' : ''}" onclick="setActiveClass(${i})">
+      <span class="swatch" style="background:${CLASS_COLORS[i]}"></span>
+      <span>${c}</span>
+      <span class="shortcut">${i + 1}</span>
+      ${p.classes.length > 1 ? `<span class="cls-del" onclick="event.stopPropagation(); removeProjectClass(${i})">✕</span>` : ''}
+    </button>
+  `).join('');
+
+  renderImageList();
+}
+
+// ── Add class during annotation ───────────────────────
+
+function addProjectClass() {
+  const p = state.current;
+  if (!p) return;
+  if (p.classes.length >= 9) { alert('Maximum 9 classes.'); return; }
+  const name = prompt('New class name:');
+  if (!name || !name.trim()) return;
+  p.classes.push(name.trim());
+  saveProjects();
+  renderAnnotateUI();
+  populateClassFilter();
+}
+
+function removeProjectClass(idx) {
+  const p = state.current;
+  if (!p || p.classes.length <= 1) return;
+
+  // Check if any boxes use this class
+  const used = p.images.some(img => img.boxes.some(b => b.classIdx === idx));
+  if (used && !confirm(`Class "${p.classes[idx]}" is used in annotations. Removing it will reassign those boxes to the first class. Continue?`)) return;
+
+  p.classes.splice(idx, 1);
+
+  // Remap box class indices
+  p.images.forEach(img => {
+    img.boxes.forEach(b => {
+      if (b.classIdx === idx) b.classIdx = 0;
+      else if (b.classIdx > idx) b.classIdx--;
+    });
+  });
+
+  // Fix active class
+  if (ann.activeClass >= p.classes.length) ann.activeClass = p.classes.length - 1;
+
+  saveProjects();
+  renderAnnotateUI();
+  populateClassFilter();
+  render();
+}
+
+// ── Batch operations ──────────────────────────────────
+
+function toggleFilteredReviewed() {
+  const filtered = getFilteredImages();
+  if (filtered.length === 0) return;
+  // If all are reviewed, unmark them; otherwise mark all as reviewed
+  const allReviewed = filtered.every(({ img }) => img.reviewed === true);
+  filtered.forEach(({ img }) => { img.reviewed = allReviewed ? false : true; });
+  saveProjects();
+  renderImageList();
+}
+
+// ── Expose for HTML onclick handlers ──────────────────
+window.setActiveClass         = setActiveClass;
+window.applyImageFilter       = applyImageFilter;
+window.selectBox              = selectBox;
+window.deleteBox              = deleteBox;
+window.addProjectClass        = addProjectClass;
+window.removeProjectClass     = removeProjectClass;
+window.toggleFilteredReviewed = toggleFilteredReviewed;
+
+// ── js/navigation.js ──
+// ══════════════════════════════════════════════════════
+// NAVIGATION — image loading, prev/next, back/forward history
+// ══════════════════════════════════════════════════════
+
+// ── Load a single image ───────────────────────────────
+
+async function loadImage(idx, pushHistory = true) {
+  const p = state.current;
+  if (!p || idx < 0 || idx >= p.images.length) return;
+
+  if (pushHistory && ann.imgIndex !== idx && ann.imgIndex >= 0) {
+    ann.navBack.push(ann.imgIndex);
+    if (ann.navBack.length > MAX_NAV) ann.navBack.shift();
+    ann.navForward = [];
+  }
+
+  ann.imgIndex    = idx;
+  ann.selectedBox = null;
+  ann.drawing     = null;
+  ann.drag        = null;
+
+  const img = p.images[idx];
+
+  // Auto-mark as reviewed when first seen (undefined = never visited)
+  // Don't override explicit unmark (reviewed === false means user pressed X)
+  if (img.reviewed === undefined) {
+    img.reviewed = true;
+    saveProjects();
+  }
+
+  document.getElementById('ann-img-label').textContent =
+    `${idx + 1} / ${p.images.length}  —  ${img.filename}`;
+  document.getElementById('btn-prev-img').disabled = idx === 0;
+  document.getElementById('btn-next-img').disabled = idx === p.images.length - 1;
+
+  renderImageList();
+  renderBoxList();
+
+  const handle = state.fileHandles[img.filename];
+  if (!handle) {
+    setCurrentImage(null);
+    document.getElementById('canvas-placeholder').style.display = 'flex';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+
+  document.getElementById('canvas-placeholder').style.display = 'none';
+
+  const file = await handle.getFile();
+  const url  = URL.createObjectURL(file);
+  await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload  = () => { setCurrentImage(i); URL.revokeObjectURL(url); res(); };
+    i.onerror = () => { URL.revokeObjectURL(url); rej(); };
+    i.src = url;
+  });
+
+  fitToView();
+  render();
+}
+
+// ── Arrow-key navigation with back/forward stacks ─────
+
+function navigateImage(delta) {
+  const p = state.current;
+  if (!p) return;
+  const filtered = getFilteredImages();
+  if (filtered.length === 0) return;
+
+  const pos = filtered.findIndex(({ i }) => i === ann.imgIndex);
+
+  if (delta < 0) {
+    // Backward: pop from back stack if available
+    if (ann.navBack.length > 0) {
+      const prevIdx = ann.navBack.pop();
+      ann.navForward.push(ann.imgIndex);
+      if (ann.navForward.length > MAX_NAV) ann.navForward.shift();
+      loadImage(prevIdx, false);
+      return;
+    }
+    // No history — filtered navigation
+    if (pos === -1) {
+      for (let j = filtered.length - 1; j >= 0; j--) {
+        if (filtered[j].i < ann.imgIndex) {
+          ann.navBack.push(ann.imgIndex);
+          ann.navForward = [];
+          loadImage(filtered[j].i, false);
+          return;
+        }
+      }
+      return;
+    }
+    if (pos - 1 < 0) return;
+    ann.navBack.push(ann.imgIndex);
+    ann.navForward = [];
+    loadImage(filtered[pos - 1].i, false);
+  } else {
+    // Forward: pop from forward stack if available
+    if (ann.navForward.length > 0) {
+      const nextIdx = ann.navForward.pop();
+      ann.navBack.push(ann.imgIndex);
+      if (ann.navBack.length > MAX_NAV) ann.navBack.shift();
+      loadImage(nextIdx, false);
+      return;
+    }
+    // No forward history — filtered navigation
+    let nextPos;
+    if (pos === -1) {
+      nextPos = filtered.findIndex(({ i }) => i > ann.imgIndex);
+      if (nextPos === -1) return;
+    } else {
+      nextPos = pos + 1;
+      if (nextPos >= filtered.length) return;
+    }
+    ann.navBack.push(ann.imgIndex);
+    loadImage(filtered[nextPos].i, false);
+  }
+}
+
+// Expose for HTML onclick
+window.loadImage      = loadImage;
+window.navigateImage  = navigateImage;
+
+// ── js/screens.js ──
+// ══════════════════════════════════════════════════════
+// SCREEN MANAGEMENT
+// ══════════════════════════════════════════════════════
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  if (name === 'projects') renderProjects();
+  if (name === 'new')      initNewProject();
+  if (name === 'annotate') renderAnnotateUI();
+}
+
+// Expose globally for onclick handlers in HTML
+window.showScreen = showScreen;
+
+// ── js/projects.js ──
+// ══════════════════════════════════════════════════════
+// PROJECTS — CRUD, list rendering, open, reload folder
+// ══════════════════════════════════════════════════════
+
+// ── Render project list ───────────────────────────────
+
+function renderProjects() {
+  const list  = document.getElementById('projects-list');
+  const empty = document.getElementById('projects-empty');
+  if (state.projects.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = state.projects.map(p => {
+    const totalBoxes = p.images.reduce((s, img) => s + img.boxes.length, 0);
+    const annotated  = p.images.filter(img => img.boxes.length > 0).length;
+    const date       = new Date(p.createdAt).toLocaleDateString();
+    return `<div class="project-item">
+      <div class="project-info">
+        <div class="project-name">${p.name}</div>
+        <div class="project-detail">${date} &nbsp;|&nbsp; ${p.images.length} images &nbsp;|&nbsp; ${annotated} annotated &nbsp;|&nbsp; ${totalBoxes} boxes &nbsp;|&nbsp; Classes: ${p.classes.join(', ')}</div>
+      </div>
+      <div class="project-actions">
+        <button class="btn-sm btn-primary" onclick="openProject('${p.id}')">Open</button>
+        <button class="btn-sm" onclick="renameProject('${p.id}')">Rename</button>
+        <button class="btn-sm" onclick="importProjectJSON('${p.id}')">Import JSON</button>
+        <button class="btn-sm btn-danger" onclick="deleteProject('${p.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── CRUD ──────────────────────────────────────────────
+
+function renameProject(id) {
+  const p = state.projects.find(p => p.id === id);
+  if (!p) return;
+  const n = prompt('New project name:', p.name);
+  if (n && n.trim()) { p.name = n.trim(); saveProjects(); renderProjects(); }
+}
+
+function deleteProject(id) {
+  if (!confirm('Delete this project and all its annotations? This cannot be undone.')) return;
+  state.projects = state.projects.filter(p => p.id !== id);
+  saveProjects();
+  renderProjects();
+}
+
+// ── Open ──────────────────────────────────────────────
+
+async function openProject(id) {
+  const p = state.projects.find(p => p.id === id);
+  if (!p) return;
+
+  const stored = await loadDirHandle(id);
+  if (stored) {
+    const perm = await stored.requestPermission({ mode: 'read' }).catch(() => 'denied');
+    if (perm === 'granted') {
+      await loadHandlesFromDir(stored, p);
+      await finaliseOpen(p);
+      return;
+    }
+  }
+
+  try {
+    const dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+    await saveDirHandle(id, dirHandle);
+    await loadHandlesFromDir(dirHandle, p);
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    alert('Could not load folder: ' + e.message);
+    return;
+  }
+
+  await finaliseOpen(p);
+}
+
+async function finaliseOpen(p) {
+  state.current = p;
+  resetAnn(p);
+  showScreen('annotate');
+  loadImage(0);
+}
+
+// ── Directory handle helpers ──────────────────────────
+
+async function loadHandlesFromDir(dirHandle, p) {
+  const handles = {};
+  for await (const entry of dirHandle.values()) {
+    if (entry.kind === 'file' && /\.(png|jpg|jpeg|bmp|webp)$/i.test(entry.name)) {
+      handles[entry.name] = entry;
+    }
+  }
+  state.fileHandles = handles;
+  if (p) {
+    const matched = p.images.filter(img => handles[img.filename]).length;
+    if (matched < p.images.length) {
+      alert(`Matched ${matched} of ${p.images.length} images. Make sure the correct folder is selected.`);
+    }
+  }
+}
+
+async function reloadFolder() {
+  try {
+    const p = state.current;
+    const dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+    if (p) await saveDirHandle(p.id, dirHandle);
+    await loadHandlesFromDir(dirHandle, p);
+    loadImage(ann.imgIndex);
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('Could not load folder: ' + e.message);
+  }
+}
+
+// Expose for HTML onclick
+window.openProject    = openProject;
+window.renameProject  = renameProject;
+window.deleteProject  = deleteProject;
+window.reloadFolder   = reloadFolder;
+
+// ── js/import.js ──
+// ══════════════════════════════════════════════════════
+// IMPORT — new project form, COCO/YOLO/JSON import
+// ══════════════════════════════════════════════════════
+
+// ── New-project transient state ───────────────────────
+
+let newProjectFiles       = [];
+let newProjectAnnotations = {};
+let newProjectDirHandle   = null;
+
+// ── Init form ─────────────────────────────────────────
+
+function initNewProject() {
+  newProjectFiles       = [];
+  newProjectAnnotations = {};
+  newProjectDirHandle   = null;
+  document.getElementById('new-project-name').value = '';
+  document.getElementById('new-folder-status').textContent = '';
+  document.getElementById('import-status').textContent = '';
+  document.getElementById('btn-create-project').disabled = true;
+  document.getElementById('classes-list').innerHTML = '';
+  addClassRow('defect');
+}
+
+// ── Class row helpers ─────────────────────────────────
+
+function addClassRow(name = '') {
+  const list = document.getElementById('classes-list');
+  const idx  = list.children.length;
+  if (idx >= 9) return;
+  const color = CLASS_COLORS[idx];
+  const row = document.createElement('div');
+  row.className = 'class-row';
+  row.innerHTML = `
+    <div class="class-swatch" style="background:${color}"></div>
+    <input type="text" placeholder="Class name" value="${name}" oninput="checkNewReady()">
+    <button class="btn-sm btn-danger" onclick="removeClassRow(this)">✕</button>
+  `;
+  list.appendChild(row);
+  checkNewReady();
+}
+
+function removeClassRow(btn) {
+  btn.closest('.class-row').remove();
+  document.querySelectorAll('#classes-list .class-row').forEach((row, i) => {
+    row.querySelector('.class-swatch').style.background = CLASS_COLORS[i];
+  });
+  checkNewReady();
+}
+
+function clearDefaultClasses() {
+  const rows = [...document.querySelectorAll('#classes-list .class-row')];
+  rows.forEach(row => {
+    const val = row.querySelector('input').value.trim();
+    if (!val || val === 'defect') row.remove();
+  });
+}
+
+function getClassNames() {
+  return [...document.querySelectorAll('#classes-list .class-row input')]
+    .map(i => i.value.trim()).filter(Boolean);
+}
+
+function checkNewReady() {
+  const hasName    = document.getElementById('new-project-name').value.trim().length > 0;
+  const hasFolder  = newProjectFiles.length > 0;
+  const hasClasses = getClassNames().length > 0;
+  document.getElementById('btn-create-project').disabled = !(hasName && hasFolder && hasClasses);
+}
+
+// ── Load image folder ─────────────────────────────────
+
+async function loadNewProjectFolder() {
+  try {
+    const dirHandle = await window.showDirectoryPicker();
+    newProjectDirHandle = dirHandle;
+    newProjectFiles = [];
+    state.fileHandles = {};
+    for await (const entry of dirHandle.values()) {
+      if (entry.kind === 'file' && /\.(png|jpg|jpeg|bmp|webp)$/i.test(entry.name)) {
+        newProjectFiles.push({ name: entry.name, handle: entry });
+        state.fileHandles[entry.name] = entry;
+      }
+    }
+    newProjectFiles.sort((a, b) => a.name.localeCompare(b.name));
+    document.getElementById('new-folder-status').textContent =
+      `${newProjectFiles.length} image(s) found.`;
+    checkNewReady();
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('Could not load folder: ' + e.message);
+  }
+}
+
+// ── COCO import ───────────────────────────────────────
+
+async function importCOCO() {
+  const [fh] = await window.showOpenFilePicker({
+    types: [{ description: 'COCO JSON', accept: { 'application/json': ['.json'] } }],
+  });
+  const data = JSON.parse(await (await fh.getFile()).text());
+
+  // Prepopulate project name
+  const nameField = document.getElementById('new-project-name');
+  if (!nameField.value.trim() && data.info?.description) {
+    nameField.value = data.info.description
+      .replace(/\s*—\s*Toni's Simple Image Annotator$/i, '').trim();
+  }
+
+  clearDefaultClasses();
+
+  // Merge categories
+  const importedClasses = (data.categories || []).map(c => c.name);
+  const existing = getClassNames();
+  importedClasses.forEach(cn => { if (!existing.includes(cn)) addClassRow(cn); });
+
+  const catMap = {};
+  (data.categories || []).forEach(c => { catMap[c.id] = c.name; });
+
+  const imgMap = {};
+  (data.images || []).forEach(img => { imgMap[img.id] = img.file_name; });
+
+  newProjectAnnotations = {};
+  (data.annotations || []).forEach(annItem => {
+    const fn = imgMap[annItem.image_id];
+    if (!fn) return;
+    if (!newProjectAnnotations[fn]) newProjectAnnotations[fn] = [];
+    const allClasses = getClassNames();
+    const classIdx = allClasses.indexOf(catMap[annItem.category_id]);
+    newProjectAnnotations[fn].push({
+      classIdx: classIdx >= 0 ? classIdx : 0,
+      x: annItem.bbox[0], y: annItem.bbox[1],
+      w: annItem.bbox[2], h: annItem.bbox[3],
+    });
+  });
+
+  const count = Object.values(newProjectAnnotations).reduce((s, a) => s + a.length, 0);
+  document.getElementById('import-status').textContent =
+    `COCO: ${count} annotation(s) imported across ${Object.keys(newProjectAnnotations).length} image(s).`;
+  checkNewReady();
+}
+
+// ── YOLO import ───────────────────────────────────────
+
+async function importYOLO() {
+  const dirHandle = await window.showDirectoryPicker();
+
+  // Try to read classes.txt from the selected directory
+  let yoloClasses = [];
+  try {
+    const classesFile = await dirHandle.getFileHandle('classes.txt');
+    const text = await (await classesFile.getFile()).text();
+    yoloClasses = text.trim().split('\n').map(s => s.trim()).filter(Boolean);
+  } catch {
+    // No classes.txt found — ask the user
+    const classInput = prompt(
+      'No classes.txt found in the selected folder.\n' +
+      'Enter class names in order, comma-separated (e.g. lump,crack,corrosion):'
+    );
+    if (!classInput) return;
+    yoloClasses = classInput.split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  if (yoloClasses.length === 0) {
+    alert('No classes defined. Import cancelled.');
+    return;
+  }
+
+  clearDefaultClasses();
+
+  const existing = getClassNames();
+  yoloClasses.forEach(cn => { if (!existing.includes(cn)) addClassRow(cn); });
+
+  newProjectAnnotations = {};
+  let count = 0;
+
+  // Load image dimensions
+  const dimMap = {};
+  for (const f of newProjectFiles) {
+    const url = URL.createObjectURL(await f.handle.getFile());
+    await new Promise(res => {
+      const img = new Image();
+      img.onload = () => {
+        dimMap[f.name] = { w: img.naturalWidth, h: img.naturalHeight };
+        URL.revokeObjectURL(url);
+        res();
+      };
+      img.src = url;
+    });
+  }
+
+  for await (const entry of dirHandle.values()) {
+    if (entry.kind !== 'file' || !entry.name.endsWith('.txt') || entry.name === 'classes.txt') continue;
+    const baseName = entry.name.replace(/\.txt$/, '');
+    const imgFile  = newProjectFiles.find(f => f.name.replace(/\.[^.]+$/, '') === baseName);
+    if (!imgFile) continue;
+    const dims = dimMap[imgFile.name];
+    if (!dims) continue;
+
+    const text = await (await entry.getFile()).text();
+    const anns = [];
+    for (const line of text.trim().split('\n')) {
+      const parts = line.trim().split(/\s+/).map(Number);
+      if (parts.length < 5) continue;
+      const [ci, cx, cy, nw, nh] = parts;
+      anns.push({
+        classIdx: ci,
+        x: (cx - nw / 2) * dims.w,
+        y: (cy - nh / 2) * dims.h,
+        w: nw * dims.w,
+        h: nh * dims.h,
+      });
+      count++;
+    }
+    if (anns.length) newProjectAnnotations[imgFile.name] = anns;
+  }
+
+  const classSource = yoloClasses.length > 0 ? ` (classes: ${yoloClasses.join(', ')})` : '';
+  document.getElementById('import-status').textContent =
+    `YOLO: ${count} annotation(s) imported${classSource}.`;
+  checkNewReady();
+}
+
+// ── Create project ────────────────────────────────────
+
+function createProject() {
+  const classes = getClassNames();
+  const images  = newProjectFiles.map(f => ({
+    filename: f.name,
+    boxes: (newProjectAnnotations[f.name] || []).map((a, i) => ({
+      id: i + 1,
+      classIdx: Math.min(a.classIdx, classes.length - 1),
+      x: a.x, y: a.y, w: a.w, h: a.h,
+    })),
+  }));
+
+  const project = {
+    id:        'proj_' + Date.now(),
+    name:      document.getElementById('new-project-name').value.trim(),
+    classes,
+    createdAt: new Date().toISOString(),
+    images,
+    nextBoxId: images.reduce((max, img) =>
+      Math.max(max, ...img.boxes.map(b => b.id), 0), 0) + 1,
+  };
+
+  state.projects.push(project);
+  state.current = project;
+  saveProjects();
+
+  if (newProjectDirHandle) saveDirHandle(project.id, newProjectDirHandle);
+  openProject(project.id);
+}
+
+// ── Project JSON import ───────────────────────────────
+
+async function importNewProjectJSON() {
+  try {
+    const [fh] = await window.showOpenFilePicker({
+      types: [{ description: 'TSIA Project JSON', accept: { 'application/json': ['.json'] } }],
+    });
+    const imported = JSON.parse(await (await fh.getFile()).text());
+    const project = {
+      ...imported,
+      id: 'proj_' + Date.now(),
+      createdAt: imported.createdAt || new Date().toISOString(),
+    };
+    if (!project.name || !project.classes || !project.images) {
+      alert('Invalid project JSON: must contain name, classes, and images.');
+      return;
+    }
+    state.projects.push(project);
+    saveProjects();
+    renderProjects();
+    showScreen('projects');
+    alert(`Project "${project.name}" imported. Open it and use "Reload Folder" to re-link the image directory.`);
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('Import failed: ' + e.message);
+  }
+}
+
+async function importProjectJSON(id) {
+  try {
+    const [fh] = await window.showOpenFilePicker({
+      types: [{ description: 'TSIA Project JSON', accept: { 'application/json': ['.json'] } }],
+    });
+    const imported = JSON.parse(await (await fh.getFile()).text());
+    const idx = state.projects.findIndex(p => p.id === id);
+    if (idx >= 0) {
+      state.projects[idx] = { ...imported, id };
+      saveProjects();
+      renderProjects();
+      alert('Project annotations imported successfully.');
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('Import failed: ' + e.message);
+  }
+}
+
+// ── Expose for HTML onclick ───────────────────────────
+window.addClassRow          = addClassRow;
+window.removeClassRow       = removeClassRow;
+window.checkNewReady        = checkNewReady;
+window.loadNewProjectFolder = loadNewProjectFolder;
+window.importCOCO           = importCOCO;
+window.importYOLO           = importYOLO;
+window.createProject        = createProject;
+window.importNewProjectJSON = importNewProjectJSON;
+window.importProjectJSON    = importProjectJSON;
+
+// ── js/export.js ──
+// ══════════════════════════════════════════════════════
+// EXPORT — COCO, YOLO, Project JSON
+// ══════════════════════════════════════════════════════
+
+// ── Shared: collect dimensions for all (or annotated) images ──
+
+async function collectImageDims(p, { onlyAnnotated = false } = {}) {
+  const dims = {};
+  if (currentImage) {
+    dims[p.images[ann.imgIndex].filename] = {
+      w: currentImage.naturalWidth,
+      h: currentImage.naturalHeight,
+    };
+  }
+  for (const img of p.images) {
+    if (dims[img.filename]) continue;
+    if (onlyAnnotated && img.boxes.length === 0) continue;
+    const handle = state.fileHandles[img.filename];
+    if (!handle) continue;
+    const d = await loadImageDims(handle);
+    if (d) dims[img.filename] = d;
+  }
+  return dims;
+}
+
+// ── COCO ──────────────────────────────────────────────
+
+async function exportCOCO() {
+  const p = state.current;
+  if (!p) return;
+
+  const dims       = await collectImageDims(p);
+  const categories = p.classes.map((name, i) => ({ id: i + 1, name, supercategory: 'object' }));
+  const images     = [];
+  const cocoAnns   = [];
+  let annId = 1;
+
+  p.images.forEach((img, imgIdx) => {
+    const d = dims[img.filename];
+    if (!d) return;
+    const imageId = imgIdx + 1;
+    images.push({ id: imageId, file_name: img.filename, width: d.w, height: d.h });
+
+    img.boxes.forEach(box => {
+      cocoAnns.push({
+        id: annId++,
+        image_id: imageId,
+        category_id: box.classIdx + 1,
+        bbox: [
+          Math.round(box.x * 10) / 10,
+          Math.round(box.y * 10) / 10,
+          Math.round(box.w * 10) / 10,
+          Math.round(box.h * 10) / 10,
+        ],
+        area: Math.round(box.w * box.h * 10) / 10,
+        segmentation: [],
+        iscrowd: 0,
+      });
+    });
+  });
+
+  downloadJSON({
+    info: { description: `${p.name} — Toni's Simple Image Annotator`, version: '1.0', year: new Date().getFullYear() },
+    licenses: [],
+    categories,
+    images,
+    annotations: cocoAnns,
+  }, `${p.name}_coco.json`);
+}
+
+// ── YOLO ──────────────────────────────────────────────
+
+async function exportYOLO() {
+  const p = state.current;
+  if (!p) return;
+
+  const dims = await collectImageDims(p, { onlyAnnotated: true });
+  const zip  = new JSZip();
+
+  // data.yaml for Ultralytics YOLOv8
+  const namesBlock = p.classes.map((c, i) => `  ${i}: ${c}`).join('\n');
+  zip.file('data.yaml', [
+    '# Generated by Toni\'s Simple Image Annotator',
+    '# Place your images in an images/ folder next to labels/',
+    'path: .',
+    'train: images',
+    'val: images',
+    '',
+    `nc: ${p.classes.length}`,
+    `names:\n${namesBlock}`,
+    '',
+  ].join('\n'));
+
+  // classes.txt (some tools still use this)
+  zip.file('classes.txt', p.classes.join('\n'));
+
+  // Label files under labels/
+  p.images.forEach(img => {
+    if (img.boxes.length === 0) return;
+    const d = dims[img.filename];
+    if (!d) return;
+    const lines = img.boxes.map(box => {
+      const cx = (box.x + box.w / 2) / d.w;
+      const cy = (box.y + box.h / 2) / d.h;
+      const nw = box.w / d.w;
+      const nh = box.h / d.h;
+      return `${box.classIdx} ${cx.toFixed(6)} ${cy.toFixed(6)} ${nw.toFixed(6)} ${nh.toFixed(6)}`;
+    });
+    zip.file('labels/' + img.filename.replace(/\.[^.]+$/, '') + '.txt', lines.join('\n'));
+  });
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `${p.name}_yolo.zip`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Project JSON ──────────────────────────────────────
+
+function exportProjectJSON() {
+  const p = state.current;
+  if (!p) return;
+  downloadJSON(p, `${p.name}_annotator.json`);
+}
+
+// Expose for HTML onclick
+window.exportCOCO        = exportCOCO;
+window.exportYOLO        = exportYOLO;
+window.exportProjectJSON = exportProjectJSON;
+
+// ── js/interaction.js ──
+// ══════════════════════════════════════════════════════
+// INTERACTION — mouse events, keyboard shortcuts, zoom, pan
+// ══════════════════════════════════════════════════════
+
+let panStart = null;
+
+// ── Mouse down ────────────────────────────────────────
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 1) {
+    panStart = { x: e.clientX, y: e.clientY, ox: ann.offsetX, oy: ann.offsetY };
+    e.preventDefault();
+    return;
+  }
+  if (e.button !== 0) return;
+  e.preventDefault();
+
+  const p = state.current;
+  if (!p || !currentImage) return;
+  const img = p.images[ann.imgIndex];
+  const [ix, iy] = clientToImage(e.clientX, e.clientY);
+
+  // Handle hit (resize)
+  if (ann.selectedBox !== null) {
+    const selBox = img.boxes.find(b => b.id === ann.selectedBox);
+    if (selBox) {
+      const hi = hitTestHandle(ix, iy, selBox);
+      if (hi >= 0) {
+        ann.drag = {
+          type: 'handle', handleIdx: hi, boxId: selBox.id,
+          startImgX: ix, startImgY: iy,
+          origBox: { ...selBox },
+          undoSnapshot: JSON.stringify(img.boxes),
+        };
+        return;
+      }
+    }
+  }
+
+  // Box hit (move)
+  for (let i = img.boxes.length - 1; i >= 0; i--) {
+    const box = img.boxes[i];
+    if (hitTestBox(ix, iy, box)) {
+      ann.selectedBox = box.id;
+      ann.drag = {
+        type: 'move', boxId: box.id,
+        startImgX: ix, startImgY: iy,
+        origBox: { ...box },
+        undoSnapshot: JSON.stringify(img.boxes),
+      };
+      renderBoxList();
+      render();
+      return;
+    }
+  }
+
+  // Start drawing
+  ann.selectedBox = null;
+  const [cx, cy] = clampToImage(ix, iy);
+  ann.drawing = { startX: cx, startY: cy, x: cx, y: cy, w: 0, h: 0 };
+  renderBoxList();
+  render();
+});
+
+// ── Mouse move ────────────────────────────────────────
+
+canvas.addEventListener('mousemove', e => {
+  // Track mouse position for crosshair
+  if (ann.showCrosshair) {
+    const rect = canvas.getBoundingClientRect();
+    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }
+
+  if (panStart) {
+    ann.offsetX = panStart.ox + (e.clientX - panStart.x);
+    ann.offsetY = panStart.oy + (e.clientY - panStart.y);
+    render();
+    return;
+  }
+  if (!currentImage) return;
+  const [ix, iy] = clientToImage(e.clientX, e.clientY);
+
+  if (ann.drag) {
+    const p   = state.current;
+    const img = p.images[ann.imgIndex];
+    const box = img.boxes.find(b => b.id === ann.drag.boxId);
+    if (!box) return;
+
+    const dx = ix - ann.drag.startImgX;
+    const dy = iy - ann.drag.startImgY;
+
+    if (ann.drag.type === 'move') {
+      const moved = clampBox({
+        x: ann.drag.origBox.x + dx,
+        y: ann.drag.origBox.y + dy,
+        w: ann.drag.origBox.w,
+        h: ann.drag.origBox.h,
+      });
+      box.x = moved.x; box.y = moved.y; box.w = moved.w; box.h = moved.h;
+    } else {
+      const updated = applyHandleDrag(ann.drag.origBox, ann.drag.handleIdx, dx, dy);
+      Object.assign(box, clampBox(updated));
+    }
+    render();
+    renderBoxList();
+    return;
+  }
+
+  if (ann.drawing) {
+    const d = ann.drawing;
+    const [cx, cy] = clampToImage(ix, iy);
+    d.x = Math.min(cx, d.startX);
+    d.y = Math.min(cy, d.startY);
+    d.w = Math.abs(cx - d.startX);
+    d.h = Math.abs(cy - d.startY);
+    render();
+    return;
+  }
+
+  // Crosshair-only update (no drag, no drawing)
+  if (ann.showCrosshair) render();
+});
+
+// Clear crosshair when mouse leaves canvas
+canvas.addEventListener('mouseleave', () => {
+  setMousePos(null);
+  render();
+});
+
+// ── Mouse up ──────────────────────────────────────────
+
+window.addEventListener('mouseup', e => {
+  if (panStart) { panStart = null; return; }
+  if (!currentImage) return;
+
+  if (ann.drag) {
+    const p   = state.current;
+    const img = p.images[ann.imgIndex];
+    const box = img.boxes.find(b => b.id === ann.drag.boxId);
+    if (box && ann.drag.undoSnapshot) {
+      const orig = ann.drag.origBox;
+      const changed = box.x !== orig.x || box.y !== orig.y ||
+                      box.w !== orig.w || box.h !== orig.h;
+      if (changed) {
+        const key = img.filename;
+        if (!ann.undoStack[key]) ann.undoStack[key] = [];
+        ann.undoStack[key].push(ann.drag.undoSnapshot);
+        if (ann.undoStack[key].length > MAX_UNDO) ann.undoStack[key].shift();
+      }
+    }
+    ann.drag = null;
+    saveProjects();
+    return;
+  }
+
+  if (ann.drawing) {
+    const d = ann.drawing;
+    ann.drawing = null;
+    if (d.w > 4 && d.h > 4) {
+      pushUndo();
+      const p   = state.current;
+      const img = p.images[ann.imgIndex];
+      const box = {
+        id: ann.nextBoxId++, classIdx: ann.activeClass,
+        x: d.x, y: d.y, w: d.w, h: d.h,
+      };
+      p.nextBoxId = ann.nextBoxId;
+      img.boxes.push(box);
+      ann.selectedBox = box.id;
+      saveProjects();
+      renderBoxList();
+      renderImageList();
+    }
+    render();
+  }
+});
+
+// ── Scroll to zoom ────────────────────────────────────
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect   = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+
+  const imgX = (mouseX - ann.offsetX) / ann.zoom;
+  const imgY = (mouseY - ann.offsetY) / ann.zoom;
+
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  ann.zoom = Math.max(0.05, Math.min(20, ann.zoom * factor));
+
+  ann.offsetX = mouseX - imgX * ann.zoom;
+  ann.offsetY = mouseY - imgY * ann.zoom;
+
+  updateZoomLabel();
+  render();
+}, { passive: false });
+
+// ── Window resize ─────────────────────────────────────
+
+window.addEventListener('resize', () => { if (currentImage) render(); });
+
+// ── Keyboard shortcuts ────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  const inAnnotate = document.getElementById('screen-annotate').classList.contains('active');
+  if (!inAnnotate) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  // Ctrl/Cmd shortcuts
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === 'z') { e.preventDefault(); undoAnnotation(); return; }
+    return; // don't intercept other Ctrl combos
+  }
+
+  // Number keys 1-9: reassign selected box class, or switch active class if no box selected
+  const num = parseInt(e.key);
+  if (!isNaN(num) && num >= 1 && num <= 9) {
+    e.preventDefault();
+    const p = state.current;
+    if (!p || num - 1 >= p.classes.length) return;
+    if (ann.selectedBox !== null) {
+      reassignBoxClass(num - 1);
+    } else {
+      setActiveClass(num - 1);
+    }
+    return;
+  }
+
+  switch (e.key) {
+    // Navigation
+    case 'a': case 'A': case 'ArrowLeft':
+      e.preventDefault(); navigateImage(-1); break;
+    case 'd': case 'D': case 'ArrowRight':
+      e.preventDefault(); navigateImage(1);  break;
+
+    // Copy boxes from previous image
+    case 'c': case 'C':
+      e.preventDefault(); copyBoxesFromPrevious(); break;
+
+    // Mark as unreviewed (needs another look)
+    case 'x': case 'X':
+      e.preventDefault(); unmarkReviewed(); break;
+
+    // Toggle crosshair
+    case 'h': case 'H':
+      e.preventDefault(); ann.showCrosshair = !ann.showCrosshair; render(); break;
+
+    // Toggle help overlay
+    case '?':
+      e.preventDefault();
+      document.getElementById('shortcuts-overlay').classList.toggle('visible');
+      break;
+
+    // Undo
+    case 'z': case 'Z':
+      e.preventDefault(); undoAnnotation(); break;
+
+    // Delete
+    case 'Delete':
+    case 'Backspace':
+      e.preventDefault();
+      if (ann.selectedBox !== null) deleteBox(ann.selectedBox);
+      else deleteLastBox();
+      break;
+
+    // Deselect
+    case 'Escape':
+      e.preventDefault();
+      ann.selectedBox = null;
+      ann.drawing = null;
+      render();
+      renderBoxList();
+      break;
+  }
+});
+
+// ── js/main.js ──
+// Toni's Simple Image Annotator (TSIA)
+// © 2026 professional-cynic — https://codeberg.org/professional-cynic
+// AGPL-3.0 — https://www.gnu.org/licenses/agpl-3.0.html
+
+// ══════════════════════════════════════════════════════
+// MAIN — boot the application
+// ══════════════════════════════════════════════════════
+
+// Side-effect imports — these modules register event listeners on load
+
+// Boot
+loadProjects();
+if (state.projects.length > 0) {
+  showScreen('projects');
+}
+
+// Expose state for inline HTML handlers that reference state.current
+window.state = state;
+</script>
+</body>
+</html>

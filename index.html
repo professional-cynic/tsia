@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<!--
+  Toni's Simple Image Annotator (TSIA)
+  © 2026 professional-cynic — https://codeberg.org/professional-cynic
+  Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0)
+  https://www.gnu.org/licenses/agpl-3.0.html
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toni's Simple Image Annotator</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════
+     SCREEN: HOME
+══════════════════════════════════════════════════════ -->
+<div id="screen-home" class="screen active">
+  <div class="home-logo">TONI'S SIMPLE IMAGE ANNOTATOR</div>
+  <div class="home-sub">Browser-based bounding box annotation with COCO and YOLO import/export. No server required.</div>
+  <div class="home-actions">
+    <button class="btn-primary" onclick="showScreen('new')">+ New Project</button>
+    <button onclick="importNewProjectJSON()">Import Project JSON</button>
+    <button onclick="showScreen('projects')">Open Projects</button>
+  </div>
+  <div class="home-footer">
+    © 2026 <a href="https://codeberg.org/professional-cynic" target="_blank">professional-cynic</a> · Licensed under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank">AGPL-3.0</a>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SCREEN: NEW PROJECT
+══════════════════════════════════════════════════════ -->
+<div id="screen-new" class="screen">
+  <div class="topbar">
+    <span class="topbar-title">New Project</span>
+    <span class="topbar-spacer"></span>
+    <button onclick="showScreen('projects')">Cancel</button>
+  </div>
+  <div class="inner">
+    <div class="card">
+      <div class="card-title">Project Details</div>
+      <div class="form-row">
+        <label>Project Name</label>
+        <input type="text" id="new-project-name" placeholder="e.g. Pipe_A defects">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Images</div>
+      <button onclick="loadNewProjectFolder()" id="btn-load-folder">Load Image Folder</button>
+      <div id="new-folder-status" style="margin-top:8px; font-size:11px; color:var(--text2);"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Import Annotations (optional)</div>
+      <div class="hint" style="margin-bottom:6px;">Import before editing classes — COCO/YOLO will auto-populate them.</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button onclick="importCOCO()" id="btn-import-coco">Import COCO JSON</button>
+        <button onclick="importYOLO()" id="btn-import-yolo">Import YOLO (folder of .txt)</button>
+      </div>
+      <div id="import-status" style="margin-top:8px; font-size:11px; color:var(--text2);"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Classes</div>
+      <div id="classes-list"></div>
+      <button class="btn-sm" onclick="addClassRow()" style="margin-top:4px;">+ Add Class</button>
+      <div class="hint" style="margin-top:8px;">Up to 9 classes. Order determines Ctrl+1 … Ctrl+9 shortcuts.</div>
+    </div>
+
+    <button class="btn-primary" id="btn-create-project" onclick="createProject()" disabled>Create Project</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SCREEN: PROJECTS
+══════════════════════════════════════════════════════ -->
+<div id="screen-projects" class="screen">
+  <div class="topbar">
+    <span class="topbar-title">Projects</span>
+    <span class="topbar-spacer"></span>
+    <button class="btn-primary" onclick="showScreen('new')">+ New Project</button>
+    <button onclick="importNewProjectJSON()">Import Project JSON</button>
+    <button onclick="showScreen('home')">Home</button>
+  </div>
+  <div class="inner" style="max-width:860px; margin:0 auto; padding:24px; width:100%;">
+    <div id="projects-list"></div>
+    <div id="projects-empty" style="display:none; color:var(--text2); text-align:center; padding:40px;">No projects yet. Create one to get started.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SCREEN: ANNOTATE
+══════════════════════════════════════════════════════ -->
+<div id="screen-annotate" class="screen">
+
+  <!-- Left sidebar -->
+  <div class="ann-sidebar">
+    <div class="ann-sidebar-section" style="padding:7px 12px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+        <div class="ann-sidebar-title" style="margin-bottom:0;">Project</div>
+        <button class="btn-sm" onclick="showScreen('projects')">← Back</button>
+      </div>
+      <div id="ann-project-name" style="font-size:12px; font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>
+      <a href="#" onclick="event.preventDefault(); reloadFolder();" style="font-size:9px; color:var(--text2); text-decoration:underline;">Reload folder</a>
+    </div>
+
+    <div class="ann-sidebar-section collapsible">
+      <div class="ann-sidebar-title collapsible-toggle" onclick="this.parentElement.classList.toggle('collapsed')">
+        <span class="collapse-arrow">▾</span> Classes
+      </div>
+      <div class="collapsible-body">
+        <div id="ann-class-list"></div>
+        <button class="btn-sm" onclick="addProjectClass()" style="width:100%; margin-top:4px; font-size:11px;">+ Add class</button>
+      </div>
+    </div>
+
+    <div class="ann-sidebar-section collapsible" style="padding:8px 12px;">
+      <div class="ann-sidebar-title collapsible-toggle" onclick="this.parentElement.classList.toggle('collapsed')">
+        <span class="collapse-arrow">▾</span> Filters
+      </div>
+      <div class="collapsible-body">
+        <select id="filter-annotation" onchange="applyImageFilter()" style="margin-bottom:4px;">
+          <option value="all">All images</option>
+          <option value="annotated">Annotated</option>
+          <option value="unannotated">Unannotated</option>
+        </select>
+        <select id="filter-review" onchange="applyImageFilter()" style="margin-bottom:4px;">
+          <option value="all">Any review status</option>
+          <option value="reviewed">Reviewed</option>
+          <option value="unreviewed">Not reviewed</option>
+        </select>
+        <select id="filter-class" onchange="applyImageFilter()">
+          <option value="all">All classes</option>
+        </select>
+        <button class="btn-sm" onclick="toggleFilteredReviewed()" style="margin-top:6px; width:100%;">✓ Toggle reviewed</button>
+      </div>
+    </div>
+
+    <div class="ann-sidebar-title" style="padding:10px 12px 4px;">
+      Images (<span id="ann-img-count">0</span> shown)
+    </div>
+    <div class="img-list" id="ann-img-list"></div>
+  </div>
+
+  <!-- Main canvas area -->
+  <div class="ann-main">
+    <div class="ann-toolbar">
+      <span class="info" id="ann-img-label">No image loaded</span>
+      <span class="info" id="ann-zoom-label" style="margin-left:auto;">100%</span>
+      <button class="btn-sm" onclick="resetZoom()">Reset Zoom</button>
+    </div>
+    <div class="canvas-wrap" id="canvas-wrap">
+      <div class="canvas-placeholder" id="canvas-placeholder">Load a folder and select an image to begin</div>
+      <canvas id="ann-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="ann-right">
+    <!-- Action buttons -->
+    <div class="ann-right-actions">
+      <button class="btn-sm" id="btn-prev-img" onclick="navigateImage(-1)">← Prev</button>
+      <button class="btn-sm" id="btn-next-img" onclick="navigateImage(1)">→ Next</button>
+      <button class="btn-sm" onclick="undoAnnotation()" id="btn-undo-ann">↩ Undo</button>
+      <button class="btn-sm" onclick="deleteLastBox()" id="btn-del-box">✕ Del Last</button>
+    </div>
+
+    <!-- Box list -->
+    <div class="ann-right-title">Boxes (<span id="box-count">0</span>)</div>
+    <div class="box-list" id="box-list"></div>
+
+    <!-- Export -->
+    <div class="ann-right-actions" style="border-top:1px solid var(--border);">
+      <button class="btn-sm btn-success" onclick="exportCOCO()">COCO</button>
+      <button class="btn-sm btn-success" onclick="exportYOLO()">YOLO</button>
+      <button class="btn-sm" onclick="exportProjectJSON()">Save</button>
+    </div>
+  </div>
+
+  <!-- Help toggle — bottom-left of canvas -->
+  <button class="shortcuts-toggle" onclick="document.getElementById('shortcuts-overlay').classList.toggle('visible')">i</button>
+
+  <!-- Shortcuts overlay -->
+  <div id="shortcuts-overlay" class="shortcuts-overlay" onclick="this.classList.remove('visible')">
+    <div class="shortcuts-card" onclick="event.stopPropagation()">
+      <div style="font-weight:700; margin-bottom:8px; font-size:12px;">Keyboard Shortcuts</div>
+      <kbd>A</kbd> / <kbd>D</kbd> Prev / Next image<br>
+      <kbd>1</kbd>…<kbd>9</kbd> Set class (or reassign selected box)<br>
+      <kbd>C</kbd> Copy boxes from previous image<br>
+      <kbd>X</kbd> Mark as unreviewed<br>
+      <kbd>H</kbd> Toggle crosshair<br>
+      <kbd>Z</kbd> Undo<br>
+      <kbd>Del</kbd> Delete selected / last box<br>
+      <kbd>Esc</kbd> Deselect<br>
+      <kbd>Scroll</kbd> Zoom &nbsp; <kbd>Middle drag</kbd> Pan<br>
+      <kbd>?</kbd> Toggle this help
+
+      <div style="border-top:1px solid var(--border); margin-top:10px; padding-top:10px; font-weight:700; margin-bottom:6px; font-size:12px;">Image Status</div>
+      <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+        <span style="width:8px; height:8px; border-radius:50%; background:var(--border); flex-shrink:0;"></span> Not reviewed
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+        <span style="width:8px; height:8px; border-radius:50%; background:var(--success); flex-shrink:0;"></span> Reviewed
+      </div>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="width:8px; height:8px; border-radius:50%; background:var(--warn); flex-shrink:0;"></span> Needs re-review
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="progress-bar" id="progress-bar">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
