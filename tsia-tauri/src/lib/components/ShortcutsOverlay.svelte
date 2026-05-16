@@ -2,9 +2,9 @@
   import { app } from '$lib/stores/app.svelte';
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="overlay" role="presentation" onclick={() => app.showHelp = false}>
-  <div class="card" role="dialog" aria-modal="true" aria-label="Keyboard Shortcuts" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+<div class="overlay" role="presentation"
+  onclick={(e) => { if (e.target === e.currentTarget) app.showHelp = false; }}>
+  <div class="card" role="dialog" aria-modal="true" aria-label="Keyboard Shortcuts" tabindex="-1">
     <div class="title">Keyboard Shortcuts</div>
     <kbd>A</kbd> / <kbd>D</kbd> Prev / Next image<br>
     <kbd>1</kbd>…<kbd>9</kbd>, <kbd>0</kbd> Set class (or reassign selected box)<br>

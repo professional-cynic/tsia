@@ -17,8 +17,9 @@
   if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); oncancel(); }
 }} />
 
-<div class="backdrop" role="presentation" onclick={oncancel}>
-  <div class="modal" role="dialog" aria-modal="true" aria-label={title} tabindex="-1" onclick={(e) => e.stopPropagation()}>
+<div class="backdrop" role="presentation"
+  onclick={(e) => { if (e.target === e.currentTarget) oncancel(); }}>
+  <div class="modal" role="dialog" aria-modal="true" aria-label={title} tabindex="-1">
     <div class="modal-title">{title}</div>
     <div class="modal-message">{message}</div>
     <div class="modal-actions">

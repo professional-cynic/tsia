@@ -9,18 +9,23 @@
   } = $props();
 
   let dropMissing = $state(false);
-  let addNew = $state(missing.length === 0 && added.length > 0);
-  // Default: if only new files exist, pre-check add. If only missing exist,
-  // keep both unchecked (destructive defaults are bad). Mixed: leave both
-  // off and let the user think.
+  let addNew = $state(false);
+
+  // Default: if only new files exist, pre-check "add new". If only missing
+  // exist, keep both unchecked (destructive defaults are bad). Mixed: leave
+  // both off and let the user think. The parent never mutates missing/added
+  // after mounting us, so this effect runs once with the right values.
+  $effect(() => {
+    if (missing.length === 0 && added.length > 0) addNew = true;
+  });
 
   let showMissingDetails = $state(false);
   let showAddedDetails = $state(false);
 </script>
 
-<div class="backdrop" role="presentation" onclick={oncancel}>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reconcile-title" tabindex="-1"
-    onclick={(e) => e.stopPropagation()}>
+<div class="backdrop" role="presentation"
+  onclick={(e) => { if (e.target === e.currentTarget) oncancel(); }}>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reconcile-title" tabindex="-1">
     <div id="reconcile-title" class="title">Reconcile "{projectName}"</div>
     <div class="hint">
       The new folder contents don't exactly match what this project remembers.

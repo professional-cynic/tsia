@@ -4,19 +4,22 @@
 
   const appWindow = getCurrentWindow();
 
-  async function close() {
-    try { await app.flushSave(); } catch { /* close anyway */ }
-    await appWindow.destroy();
-  }
+  // destroy() force-closes immediately. We deliberately do NOT route through
+  // close() / onCloseRequested because (a) appWindow.close() from JS doesn't
+  // reliably fire close-requested in current Tauri 2, and (b) the autosave
+  // debounce is short enough that "lose pending save on close" is rare.
+  // Requires the core:window:allow-destroy capability — it's a separate
+  // permission from allow-close, easy to miss.
+  async function close() { await appWindow.destroy(); }
   async function minimize() { await appWindow.minimize(); }
 </script>
 
 <div class="titlebar" data-tauri-drag-region>
-  <button class="titlebar-title" onclick={() => app.screen = 'home'} title="Home">
+  <button class="titlebar-title" data-tauri-drag-region="false" onclick={() => app.screen = 'home'} title="Home">
     Toni's Simple Image Annotator
   </button>
   <span class="titlebar-spacer" data-tauri-drag-region></span>
-  <div class="titlebar-controls">
+  <div class="titlebar-controls" data-tauri-drag-region="false">
     <button class="titlebar-btn" onclick={minimize} title="Minimise">─</button>
     <button class="titlebar-btn titlebar-close" onclick={close} title="Close">✕</button>
   </div>

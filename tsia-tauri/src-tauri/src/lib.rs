@@ -6,6 +6,7 @@ mod export;
 mod fs_helpers;
 mod import;
 mod opener_bridge;
+mod util;
 
 use tauri::Manager;
 
@@ -34,6 +35,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             app.manage(export::ExportCancel::default());
+            // Pre-create $APPDATA/projects so the frontend's fs scope can be
+            // restricted to that subdir only (it can't mkdir its own parent).
+            if let Ok(app_data) = app.path().app_data_dir() {
+                let projects = app_data.join("projects");
+                let _ = std::fs::create_dir_all(&projects);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

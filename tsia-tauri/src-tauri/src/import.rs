@@ -1,13 +1,14 @@
 //! Dataset import — parses COCO JSON or YOLO label folders entirely on the
 //! Rust side, so the frontend never needs an fs scope outside AppData.
 
+use crate::util::strip_ext;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ImportedAnnotation {
-    #[serde(rename = "classIdx")]
     pub class_idx: usize,
     pub x: f64,
     pub y: f64,
@@ -16,12 +17,13 @@ pub struct ImportedAnnotation {
 }
 
 #[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct ImportedDataset {
     pub classes: Vec<String>,
     pub annotations: HashMap<String, Vec<ImportedAnnotation>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(rename = "needsClasses", skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub needs_classes: Option<bool>,
 }
 
@@ -152,11 +154,4 @@ fn scan_yolo_dir<'a>(
         }
         Ok(())
     })
-}
-
-fn strip_ext(filename: &str) -> String {
-    match filename.rsplit_once('.') {
-        Some((stem, _)) => stem.to_string(),
-        None => filename.to_string(),
-    }
 }

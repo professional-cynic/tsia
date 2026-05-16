@@ -3,6 +3,7 @@
 //! file copies or hardlinks, dispatches work across a bounded pool of tasks,
 //! and streams progress to the frontend via a typed IPC channel.
 
+use crate::util::strip_ext;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -117,7 +118,6 @@ pub async fn export_dataset(
     }
 
     let wrapper_str = wrapper.to_string_lossy().to_string();
-    let _ = on_event.send(Progress::Start { total: 0, out_path: wrapper_str.clone() });
 
     let result = run(&req, &wrapper, &cancel, &on_event).await;
 
@@ -510,13 +510,6 @@ Exported from Toni's Simple Image Annotator on {date}.
 // ── Helpers ──────────────────────────────────────────────
 
 fn round1(n: f64) -> f64 { (n * 10.0).round() / 10.0 }
-
-fn strip_ext(filename: &str) -> String {
-    match filename.rsplit_once('.') {
-        Some((stem, _)) => stem.to_string(),
-        None => filename.to_string(),
-    }
-}
 
 fn io_err(label: &'static str) -> impl Fn(std::io::Error) -> String {
     move |e| format!("{label}: {e}")

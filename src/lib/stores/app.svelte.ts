@@ -3,7 +3,7 @@
 // properties without hitting Svelte's "cannot assign to import" restriction.
 
 import type { Project, Screen, ImageEntry, Box, AnnotationFilter, ReviewFilter } from '$lib/types';
-import { MAX_UNDO, MAX_NAV, AUTOSAVE_DELAY } from '$lib/constants';
+import { MAX_CLASSES, MAX_UNDO, MAX_NAV, AUTOSAVE_DELAY } from '$lib/constants';
 import { saveProject } from '$lib/persistence';
 
 type BoxSnapshot = Box[];
@@ -48,11 +48,6 @@ class AppState {
   filterClass = $state<string>('all');
 
   // ── Derived (getters are reactive in Svelte 5 classes) ──
-
-  get currentImage(): ImageEntry | null {
-    return this.current && this.imgIndex >= 0 && this.imgIndex < this.current.images.length
-      ? this.current.images[this.imgIndex] : null;
-  }
 
   get baseFilteredImages(): { img: ImageEntry; i: number }[] {
     if (!this.current) return [];
@@ -99,7 +94,13 @@ class AppState {
     this.current.filterReview = this.filterReview;
     this.current.filterClass = this.filterClass;
     this.saveStatus = 'saving';
-    await saveProject(this.current);
+    // $state.snapshot strips the Svelte proxy machinery. Without this,
+    // JSON.stringify reads every property through a proxy handler — fine for
+    // small projects, but visibly blocking for projects with thousands of
+    // images. The snapshot copies once into plain objects, then stringify
+    // runs over those at native speed.
+    const plain = $state.snapshot(this.current);
+    await saveProject(plain as Project);
     this.saveStatus = 'idle';
   }
 
@@ -364,7 +365,7 @@ class AppState {
   }
 
   addClass(name: string) {
-    if (!this.current || this.current.classes.length >= 9) return;
+    if (!this.current || this.current.classes.length >= MAX_CLASSES) return;
     this.current.classes.push(name.trim());
     this.scheduleSave();
   }

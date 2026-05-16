@@ -9,3 +9,9 @@ export const MAX_UNDO = 50;
 export const MAX_NAV = 100;
 export const HANDLE_SIZE = 7;
 export const AUTOSAVE_DELAY = 1000; // ms debounce
+
+/// Keyboard digit that selects class at index `i` (1..9 for the first nine,
+/// 0 for the tenth). Mirrors the digit handler in CanvasArea.
+export function classShortcutLabel(i: number): string {
+  return i === 9 ? '0' : String(i + 1);
+}

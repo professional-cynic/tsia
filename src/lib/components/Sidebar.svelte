@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CLASS_COLORS, MAX_CLASSES } from '$lib/constants';
+  import { CLASS_COLORS, MAX_CLASSES, classShortcutLabel } from '$lib/constants';
   import { app } from '$lib/stores/app.svelte';
   import InputModal from './InputModal.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
@@ -76,7 +76,7 @@
             role="button" tabindex="0">
             <span class="swatch" style:background={CLASS_COLORS[i]}></span>
             <span>{cls}</span>
-            <span class="shortcut">{i === 9 ? 0 : i + 1}</span>
+            <span class="shortcut">{classShortcutLabel(i)}</span>
             {#if (app.current?.classes.length ?? 0) > 1}
               <button class="cls-del" onclick={(e) => { e.stopPropagation(); handleRemoveClass(i); }}>✕</button>
             {/if}

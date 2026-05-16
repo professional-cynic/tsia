@@ -24,8 +24,9 @@
   }
 </script>
 
-<div class="backdrop" role="presentation" onclick={oncancel}>
-  <div class="modal" role="dialog" aria-modal="true" aria-label={title} tabindex="-1" onclick={(e) => e.stopPropagation()}>
+<div class="backdrop" role="presentation"
+  onclick={(e) => { if (e.target === e.currentTarget) oncancel(); }}>
+  <div class="modal" role="dialog" aria-modal="true" aria-label={title} tabindex="-1">
     <div class="modal-title">{title}</div>
     <input
       bind:this={inputEl}

@@ -1,5 +1,14 @@
 //! Helpers used by the new-project flow that scan filesystem locations the
 //! frontend can't reach without an fs scope.
+//!
+//! ## Security note
+//!
+//! These commands accept arbitrary paths from the frontend and act on them
+//! with the process's full filesystem access. That's intentional — Rust
+//! commands replace the frontend's fs scope for non-AppData paths — but it
+//! means **these commands ARE the security boundary**. The frontend should
+//! only ever invoke them with paths the user picked via a dialog. Adding new
+//! Rust fs commands without that discipline would widen the attack surface.
 
 use std::path::PathBuf;
 

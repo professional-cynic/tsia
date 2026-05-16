@@ -7,22 +7,10 @@
   import { app } from '$lib/stores/app.svelte';
   import { loadAllProjects } from '$lib/persistence';
   import { onMount } from 'svelte';
-  import { getCurrentWindow } from '@tauri-apps/api/window';
 
   onMount(async () => {
     app.projects = await loadAllProjects();
     if (app.projects.length > 0) app.screen = 'projects';
-
-    // Flush any debounced save before the window actually closes. Without
-    // this, closing within the autosave debounce window loses up to one
-    // second of work.
-    const w = getCurrentWindow();
-    const unlisten = await w.onCloseRequested(async (event) => {
-      event.preventDefault();
-      try { await app.flushSave(); } catch { /* still close on save failure */ }
-      await w.destroy();
-    });
-    return () => unlisten();
   });
 </script>
 

@@ -11,75 +11,80 @@
 
   let renameTarget = $state<Project | null>(null);
   let deleteTarget = $state<string | null>(null);
-  let exportTarget = $state<Project | null>(null);
   let splitRatio = $state(80);
   let linkMode = $state<LinkMode>('copy');
-  let exporting = $state(false);
-  let exportCurrent = $state(0);
-  let exportTotal = $state(0);
-  let exportLabel = $state('');
-  let exportCurrentFile = $state('');
-  let exportOutPath = $state('');
-  let exportError = $state('');
-  let exportCancelled = $state(false);
-  let exportWarnings = $state<{ filename: string; message: string }[]>([]);
-  let exportDone = $state(false);
+
+  // Export state machine. One union variant at a time means the UI can
+  // pattern-match cleanly instead of guessing from a soup of booleans.
+  type ExportState =
+    | { kind: 'idle' }
+    | { kind: 'configuring'; project: Project }
+    | { kind: 'running'; format: Format; current: number; total: number;
+        currentFile: string; outPath: string; cancelled: boolean;
+        warnings: { filename: string; message: string }[] }
+    | { kind: 'done'; outPath: string;
+        warnings: { filename: string; message: string }[] }
+    | { kind: 'error'; message: string };
+
+  let exportState = $state<ExportState>({ kind: 'idle' });
 
   async function doExport(format: Format) {
-    const p = exportTarget;
-    if (!p) return;
+    if (exportState.kind !== 'configuring') return;
+    const p = exportState.project;
 
     const folder = await pickExportFolder();
     if (!folder) return;
 
-    exportLabel = format.toUpperCase();
-    exportCurrent = 0;
-    exportTotal = p.images.filter(img => img.boxes.length > 0).length;
-    exportCurrentFile = '';
-    exportOutPath = '';
-    exportError = '';
-    exportCancelled = false;
-    exportWarnings = [];
-    exportDone = false;
-    exportTarget = null;
-    exporting = true;
+    const total = p.images.filter(img => img.boxes.length > 0).length;
+    exportState = {
+      kind: 'running',
+      format, current: 0, total,
+      currentFile: '', outPath: '',
+      cancelled: false, warnings: [],
+    };
 
     try {
       await exportDataset(p, {
-        format,
-        linkMode,
-        outDir: folder,
+        format, linkMode, outDir: folder,
         trainRatio: splitRatio / 100,
         onProgress: (e) => {
+          if (exportState.kind !== 'running') return;
           switch (e.kind) {
             case 'start':
-              exportTotal = e.data.total;
-              exportOutPath = e.data.outPath;
+              exportState.total = e.data.total;
+              exportState.outPath = e.data.outPath;
               break;
             case 'item':
-              exportCurrent = e.data.current;
-              exportCurrentFile = e.data.filename;
+              exportState.current = e.data.current;
+              exportState.currentFile = e.data.filename;
               break;
             case 'warning':
-              exportWarnings.push(e.data);
+              exportState.warnings.push(e.data);
               break;
             case 'cancelled':
-              exportCancelled = true;
+              exportState.cancelled = true;
               break;
             case 'failed':
-              exportError = e.data.message;
+              exportState = { kind: 'error', message: e.data.message };
               break;
             case 'done':
-              exportOutPath = e.data.outPath;
-              exportDone = true;
+              exportState = {
+                kind: 'done',
+                outPath: e.data.outPath,
+                warnings: exportState.warnings,
+              };
               break;
           }
         },
       });
+      // If the run ended without a 'done'/'failed' event (cancel path),
+      // settle to idle so the modal closes.
+      if (exportState.kind === 'running') {
+        exportState = { kind: 'idle' };
+      }
     } catch (e) {
-      if (!exportError) exportError = e instanceof Error ? e.message : String(e);
-    } finally {
-      exporting = false;
+      const message = e instanceof Error ? e.message : String(e);
+      if (exportState.kind !== 'error') exportState = { kind: 'error', message };
     }
   }
 
@@ -220,7 +225,7 @@
           </div>
           <div class="project-actions">
             <button class="btn-sm btn-primary" onclick={() => openProject(p)}>Open</button>
-            <button class="btn-sm" onclick={() => exportTarget = p}>Export</button>
+            <button class="btn-sm" onclick={() => exportState = { kind: 'configuring', project: p }}>Export</button>
             <button class="btn-sm" onclick={() => renameTarget = p}>Rename</button>
             <button class="btn-sm btn-danger" onclick={() => deleteTarget = p.id}>Delete</button>
           </div>
@@ -258,11 +263,11 @@
   />
 {/if}
 
-{#if exportTarget && !exporting}
-  <div class="export-backdrop" role="presentation" onclick={() => exportTarget = null}>
-    <div class="export-modal" role="dialog" aria-modal="true" aria-labelledby="export-title" tabindex="-1"
-      onclick={(e) => e.stopPropagation()}>
-      <div id="export-title" class="export-title">Export "{exportTarget.name}"</div>
+{#if exportState.kind === 'configuring'}
+  <div class="export-backdrop" role="presentation"
+    onclick={(e) => { if (e.target === e.currentTarget) exportState = { kind: 'idle' }; }}>
+    <div class="export-modal" role="dialog" aria-modal="true" aria-labelledby="export-title" tabindex="-1">
+      <div id="export-title" class="export-title">Export "{exportState.project.name}"</div>
       <div class="export-row">
         <span class="export-label">Train / Val split: {splitRatio}% / {100 - splitRatio}%</span>
         <input type="range" min="50" max="100" step="5" bind:value={splitRatio} />
@@ -282,70 +287,66 @@
       <div class="export-actions">
         <button class="btn-sm btn-success" onclick={() => doExport('coco')}>COCO</button>
         <button class="btn-sm btn-success" onclick={() => doExport('yolo')}>YOLO</button>
-        <button class="btn-sm" onclick={() => exportTarget = null}>Cancel</button>
+        <button class="btn-sm" onclick={() => exportState = { kind: 'idle' }}>Cancel</button>
       </div>
     </div>
   </div>
-{/if}
-
-{#if exporting}
+{:else if exportState.kind === 'running'}
   <div class="export-backdrop" role="presentation">
     <div class="export-modal" role="dialog" aria-modal="true" aria-labelledby="export-progress-title" tabindex="-1">
       <div id="export-progress-title" class="export-title">
-        {exportCancelled ? 'Cancelling…' : `Exporting ${exportLabel}…`}
+        {exportState.cancelled ? 'Cancelling…' : `Exporting ${exportState.format.toUpperCase()}…`}
       </div>
       <div class="export-progress-bar"
         role="progressbar"
         aria-valuemin="0"
-        aria-valuemax={exportTotal}
-        aria-valuenow={exportCurrent}>
-        <div class="export-progress-fill" style:width="{exportTotal > 0 ? (exportCurrent / exportTotal * 100) : 0}%"></div>
+        aria-valuemax={exportState.total}
+        aria-valuenow={exportState.current}>
+        <div class="export-progress-fill" style:width="{exportState.total > 0 ? (exportState.current / exportState.total * 100) : 0}%"></div>
       </div>
-      <div class="export-progress-text">{exportCurrent} / {exportTotal} images</div>
-      {#if exportCurrentFile}
-        <div class="export-current-file">{exportCurrentFile}</div>
+      <div class="export-progress-text">{exportState.current} / {exportState.total} images</div>
+      {#if exportState.currentFile}
+        <div class="export-current-file">{exportState.currentFile}</div>
       {/if}
       <div class="export-actions" style="margin-top:12px; justify-content:center;">
-        <button class="btn-sm btn-danger" disabled={exportCancelled} onclick={() => cancelExport()}>Cancel</button>
+        <button class="btn-sm btn-danger" disabled={exportState.cancelled} onclick={() => cancelExport()}>Cancel</button>
       </div>
     </div>
   </div>
-{/if}
-
-{#if exportError}
+{:else if exportState.kind === 'error'}
   <div class="export-backdrop" role="presentation">
     <div class="export-modal" role="dialog" aria-modal="true" aria-labelledby="export-error-title" tabindex="-1">
       <div id="export-error-title" class="export-title">Export failed</div>
-      <div class="export-error">{exportError}</div>
+      <div class="export-error">{exportState.message}</div>
       <div class="export-actions" style="margin-top:12px; justify-content:flex-end;">
-        <button class="btn-sm" onclick={() => exportError = ''}>Close</button>
+        <button class="btn-sm" onclick={() => exportState = { kind: 'idle' }}>Close</button>
       </div>
     </div>
   </div>
-{:else if !exporting && exportDone}
+{:else if exportState.kind === 'done'}
   <div class="export-backdrop" role="presentation">
     <div class="export-modal" role="dialog" aria-modal="true" aria-labelledby="export-done-title" tabindex="-1">
       <div id="export-done-title" class="export-title">
-        Export complete{exportWarnings.length > 0 ? ` — ${exportWarnings.length} warning${exportWarnings.length === 1 ? '' : 's'}` : ''}
+        Export complete{exportState.warnings.length > 0 ? ` — ${exportState.warnings.length} warning${exportState.warnings.length === 1 ? '' : 's'}` : ''}
       </div>
-      {#if exportOutPath}
+      {#if exportState.outPath}
         <div class="export-row">
           <span class="export-label">Saved to:</span>
-          <div class="export-path">{exportOutPath}</div>
+          <div class="export-path">{exportState.outPath}</div>
         </div>
       {/if}
-      {#if exportWarnings.length > 0}
+      {#if exportState.warnings.length > 0}
         <div class="export-warnings">
-          {#each exportWarnings.slice(0, 20) as w}
+          {#each exportState.warnings.slice(0, 20) as w}
             <div class="warning-row"><span class="warning-file">{w.filename}</span>: {w.message}</div>
           {/each}
-          {#if exportWarnings.length > 20}
-            <div class="warning-row">…and {exportWarnings.length - 20} more.</div>
+          {#if exportState.warnings.length > 20}
+            <div class="warning-row">…and {exportState.warnings.length - 20} more.</div>
           {/if}
         </div>
       {/if}
       <div class="export-actions" style="margin-top:12px; justify-content:flex-end;">
-        <button class="btn-sm" onclick={() => { exportDone = false; exportWarnings = []; }}>Close</button>
+        <button class="btn-sm" onclick={() => exportState = { kind: 'idle' }}>Close</button>
       </div>
     </div>
   </div>
