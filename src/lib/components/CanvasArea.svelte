@@ -103,6 +103,7 @@
 
   function handleMouseMove(e: MouseEvent) {
     if (panStart) { app.offsetX = panStart.ox + (e.clientX - panStart.x); app.offsetY = panStart.oy + (e.clientY - panStart.y); return; }
+    if (!app.drag && !app.drawing) return;
     if (!loadedImage || !app.current) return;
     const [ix, iy] = clientToImage(e.clientX, e.clientY, canvasEl, app.offsetX, app.offsetY, app.zoom);
     const imgW = loadedImage.naturalWidth, imgH = loadedImage.naturalHeight;
@@ -224,11 +225,13 @@
   onMount(() => {
     ctx = canvasEl.getContext('2d')!;
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     const onResize = () => { if (loadedImage) fitToView(loadedImage); };
     window.addEventListener('resize', onResize);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('resize', onResize);
     };
@@ -247,7 +250,7 @@
     <div class="placeholder">Select an image to begin</div>
   {/if}
   <canvas bind:this={canvasEl} class="ann-canvas"
-    onmousedown={handleMouseDown} onmousemove={handleMouseMove}
+    onmousedown={handleMouseDown}
     onwheel={handleWheel}></canvas>
 </div>
 

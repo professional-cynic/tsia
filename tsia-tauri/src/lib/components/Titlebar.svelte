@@ -4,13 +4,16 @@
 
   const appWindow = getCurrentWindow();
 
-  // destroy() force-closes immediately. We deliberately do NOT route through
-  // close() / onCloseRequested because (a) appWindow.close() from JS doesn't
-  // reliably fire close-requested in current Tauri 2, and (b) the autosave
-  // debounce is short enough that "lose pending save on close" is rare.
-  // Requires the core:window:allow-destroy capability — it's a separate
-  // permission from allow-close, easy to miss.
-  async function close() { await appWindow.destroy(); }
+  // destroy() force-closes immediately; we flush any pending autosave first
+  // so the close-during-debounce window can't lose edits. close-requested
+  // doesn't reliably fire from JS in Tauri 2, hence the manual flush rather
+  // than routing through close() + an event handler.
+  // Requires the core:window:allow-destroy capability — separate from
+  // allow-close, easy to miss.
+  async function close() {
+    await app.flushSave();
+    await appWindow.destroy();
+  }
   async function minimize() { await appWindow.minimize(); }
 </script>
 

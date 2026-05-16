@@ -11,6 +11,7 @@
 //! Rust fs commands without that discipline would widen the attack surface.
 
 use std::path::PathBuf;
+use tauri::{AppHandle, Manager};
 
 const IMG_EXT: &[&str] = &["png", "jpg", "jpeg", "bmp", "webp"];
 
@@ -30,6 +31,32 @@ pub async fn dir_exists(path: PathBuf) -> bool {
         Ok(m) => m.is_dir(),
         Err(_) => false,
     }
+}
+
+/// Expand the asset protocol's runtime scope to cover a single directory,
+/// recursively. Used by the frontend whenever a project is opened or created
+/// so its image folder can be served to the webview via `convertFileSrc`.
+///
+/// The static scope in `tauri.conf.json` is empty — every accessible path is
+/// added here, at runtime, in response to an explicit user action (the dir
+/// having been picked from a dialog). This restricts the asset protocol to
+/// exactly the folders the user has chosen this session.
+///
+/// Returns Err if the path is missing or isn't a directory. Project-open
+/// flows should call `dir_exists` first and trigger the relocate prompt on
+/// false before invoking this; new-project flows have already validated via
+/// the dialog. A best-effort caller can still ignore the error — the only
+/// observable consequence is that the canvas will fail to load images for
+/// the session.
+#[tauri::command]
+pub async fn allow_asset_dir(app: AppHandle, dir: PathBuf) -> Result<(), String> {
+    let meta = tokio::fs::metadata(&dir).await.map_err(|e| format!("stat: {e}"))?;
+    if !meta.is_dir() {
+        return Err("path is not a directory".to_string());
+    }
+    app.asset_protocol_scope()
+        .allow_directory(&dir, true)
+        .map_err(|e| format!("allow_directory: {e}"))
 }
 
 fn scan<'a>(

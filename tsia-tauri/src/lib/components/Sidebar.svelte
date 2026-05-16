@@ -124,7 +124,7 @@
         {@const dotClass = img.reviewed === true ? 'reviewed' : img.reviewed === false ? 'needs-review' : ''}
         <button class="img-item" class:active={isCurrent} class:out-of-filter={outOfFilter}
           onclick={() => app.setImageIndex(i)}
-          ondblclick={() => { img.reviewed = img.reviewed === false ? true : false; app.scheduleSave(); }}
+          ondblclick={() => app.toggleReviewedFor(img)}
           title={img.filename}>
           <div class="ann-dot {dotClass}"></div>
           <span class="img-name">{img.filename}</span>

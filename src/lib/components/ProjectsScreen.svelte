@@ -4,6 +4,7 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import { invoke } from '@tauri-apps/api/core';
   import type { Project } from '$lib/types';
+  import { allowAssetDir } from '$lib/io/import';
   import InputModal from './InputModal.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
   import ReconcileModal from './ReconcileModal.svelte';
@@ -103,6 +104,7 @@
       relocateTarget = p;
       return;
     }
+    await allowAssetDir(p.imageDirPath);
     app.resetAnnotationState(p);
     app.setImageIndex(0, false);
     app.screen = 'annotate';
@@ -137,6 +139,7 @@
     if (missing.length === 0 && added.length === 0) {
       // Clean relocate, no divergence. Open silently.
       await saveProject(relocateTarget);
+      await allowAssetDir(newDir);
       const p = relocateTarget;
       relocateTarget = null;
       app.resetAnnotationState(p);
@@ -182,6 +185,7 @@
     }
 
     await saveProject(project);
+    await allowAssetDir(project.imageDirPath);
     reconcileState = null;
     app.resetAnnotationState(project);
     app.setImageIndex(0, false);

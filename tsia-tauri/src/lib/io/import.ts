@@ -20,6 +20,14 @@ export async function scanImageFolder(dir: string): Promise<string[]> {
   return await invoke<string[]>('scan_image_folder', { dir });
 }
 
+/// Expand the asset protocol's runtime scope to include an image folder so
+/// the canvas can load images from it via convertFileSrc. Must be called
+/// once per project session before any image is rendered; the static scope
+/// in tauri.conf.json is empty by design.
+export async function allowAssetDir(dir: string): Promise<void> {
+  await invoke('allow_asset_dir', { dir });
+}
+
 export async function importCOCO(): Promise<ImportedDataset | null> {
   const path = await open({
     title: 'Import COCO JSON',

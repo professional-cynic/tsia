@@ -1,12 +1,10 @@
 <script lang="ts">
-  let { value = $bindable(''), options, label = '' }: {
+  let { value = $bindable(''), options }: {
     value: string;
     options: { value: string; label: string }[];
-    label?: string;
   } = $props();
 
   let isOpen = $state(false);
-  let buttonEl: HTMLButtonElement;
 
   function select(v: string) {
     value = v;
@@ -25,7 +23,6 @@
 <div class="select-wrap">
   <button
     class="select-btn"
-    bind:this={buttonEl}
     onclick={(e) => { e.stopPropagation(); isOpen = !isOpen; }}
   >
     <span class="select-label">{selectedLabel}</span>

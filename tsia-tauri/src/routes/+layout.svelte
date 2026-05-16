@@ -5,16 +5,23 @@
   let { children } = $props();
 
   onMount(() => {
-    document.addEventListener('contextmenu', (e) => e.preventDefault());
-
     const appWindow = getCurrentWindow();
-    document.addEventListener('keydown', async (e) => {
+
+    const onContextMenu = (e: MouseEvent) => e.preventDefault();
+    const onKeyDown = async (e: KeyboardEvent) => {
       if (e.key === 'F11') {
         e.preventDefault();
         const isFullscreen = await appWindow.isFullscreen();
         await appWindow.setFullscreen(!isFullscreen);
       }
-    });
+    };
+
+    document.addEventListener('contextmenu', onContextMenu);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('contextmenu', onContextMenu);
+      document.removeEventListener('keydown', onKeyDown);
+    };
   });
 </script>
 

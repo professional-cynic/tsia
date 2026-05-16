@@ -3,7 +3,7 @@
   import { saveProject } from '$lib/persistence';
   import { CLASS_COLORS, MAX_CLASSES } from '$lib/constants';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { importCOCO, importYOLO, scanImageFolder } from '$lib/io/import';
+  import { importCOCO, importYOLO, scanImageFolder, allowAssetDir, type ImportedAnnotation } from '$lib/io/import';
   import type { Project } from '$lib/types';
   import InputModal from './InputModal.svelte';
 
@@ -11,7 +11,7 @@
   let classes = $state<string[]>(['defect']);
   let imageDirPath = $state('');
   let imageFiles = $state<string[]>([]);
-  let importedAnnotations = $state<Record<string, any[]>>({});
+  let importedAnnotations = $state<Record<string, ImportedAnnotation[]>>({});
   let importStatus = $state('');
   let folderStatus = $state('');     // shown under the Images card
   let createError = $state('');      // shown above the Create button
@@ -100,6 +100,11 @@
         (max, img) => Math.max(max, ...img.boxes.map(b => b.id), 0), 0
       ) + 1;
       await saveProject(project);
+      // Allow the canvas to load images from this folder this session. With
+      // an empty static scope, every accessible directory must be added at
+      // runtime — the user just picked this one from a dialog so it's a
+      // safe moment to do so.
+      await allowAssetDir(imageDirPath);
       app.projects.push(project);
       app.resetAnnotationState(project);
       app.setImageIndex(0, false);

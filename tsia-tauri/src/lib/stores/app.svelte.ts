@@ -356,6 +356,14 @@ class AppState {
     this.scheduleSave();
   }
 
+  /// Toggle review state on an arbitrary image (not necessarily the current
+  /// one). Used by the sidebar's row-dblclick handler; same semantics as
+  /// toggleReviewed but without changing imgIndex.
+  toggleReviewedFor(img: ImageEntry) {
+    img.reviewed = img.reviewed === false ? true : false;
+    this.scheduleSave();
+  }
+
   toggleFilteredReviewed() {
     const filtered = this.filteredImages;
     if (filtered.length === 0) return;
