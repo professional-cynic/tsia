@@ -93,7 +93,7 @@ chmod +x TSIA_*.AppImage
 ./TSIA_*.AppImage
 ```
 
-Tested on Fedora and Ubuntu. WebKitGTK 4.1 is required (preinstalled on
+Tested on Fedora. WebKitGTK 4.1 is required (preinstalled on
 most modern desktop distros).
 
 ### Updates
