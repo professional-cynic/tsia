@@ -13,6 +13,8 @@ Built with [Tauri 2](https://tauri.app) and [SvelteKit](https://kit.svelte.dev).
 > [GitHub Releases](https://github.com/professional-cynic/tsia/releases)
 > (Codeberg auto-mirrors there for the build pipeline).
 
+ ![TSIA annotating a sample image](/screenshot.png)
+
 ## What it does
 
 - Draw, edit, move, and resize axis-aligned bounding boxes on images.
@@ -22,7 +24,7 @@ Built with [Tauri 2](https://tauri.app) and [SvelteKit](https://kit.svelte.dev).
   when creating a project. A reconcile flow handles the case where your
   image set has drifted from what the annotations refer to.
 - Export to **COCO JSON** or **YOLO** with cancellable progress.
-- Optional **hardlink mode** on export: produces a dataset folder where
+- Optional **hardlink mode** on export — produces a dataset folder where
   each image is a hardlink rather than a copy, saving disk space on large
   datasets.
 - Mark images as **reviewed** to track progress through a dataset. The
@@ -36,6 +38,23 @@ It does *not* do segmentation, polygon annotation, rotated boxes,
 multi-user collaboration, dataset versioning, training pipelines, or
 inference. By design.
 
+## Why? 
+  
+I built this for myself first, hence the name. The existing options
+felt wrong for solo work: the full-featured ones (CVAT, Label Studio)
+bring a server, a database, and team-collaboration features I didn't
+need; the lightweight ones (LabelImg and the various Python-Qt scripts)
+require a working Python environment with the right versions of PyQt
+and friends, which is fine once but tedious to maintain across
+machines. Finally none of them felt really ergonomic to me. 
+
+TSIA aims for the middle: a single binary you double-click, no
+dependencies to install, no server to run. The feature set is
+deliberately narrow (axis-aligned boxes only) so the rest of the
+design budget went into ergonomics: keyboard shortcuts that match what
+your hands already know, an undo stack, autosave, a per-image review
+state, and COCO and YOLO export that round-trips properly.
+
 ## Install
 
 Downloads for all platforms live on the
@@ -46,7 +65,7 @@ Pick the file matching your OS.
 
 Download the `.exe` (filename `TSIA_<version>_x64-setup.exe`) and run it.
 
-SmartScreen will probably warn you about an "unknown publisher": that's
+SmartScreen will probably warn you about an "unknown publisher" — that's
 because the binary isn't code-signed (a code-signing certificate is
 ~$200/year and not worth it for a project this small). Click **More info
 → Run anyway**. After install, updates happen via an in-app banner; you
@@ -77,39 +96,6 @@ chmod +x TSIA_*.AppImage
 Tested on Fedora and Ubuntu. WebKitGTK 4.1 is required (preinstalled on
 most modern desktop distros).
 
-**Wayland workaround.** On GNOME 45+ and other recent Wayland sessions,
-the AppImage may launch with a blank window and print
-`EGL_BAD_PARAMETER` in the terminal. This is an upstream WebKitGTK +
-AppImage bug affecting many Tauri apps, not specific to TSIA. The
-workaround is to preload your system's Wayland client library:
-
-```bash
-LD_PRELOAD=/usr/lib64/libwayland-client.so.0 ./TSIA_*.AppImage
-```
-
-The path above works on Fedora (tested on Silverblue). On Debian/Ubuntu
-use `/usr/lib/x86_64-linux-gnu/libwayland-client.so.0` instead. If you
-still see issues, combine with WebKit flags:
-
-```bash
-WEBKIT_DISABLE_COMPOSITING_MODE=1 \
-WEBKIT_DISABLE_DMABUF_RENDERER=1 \
-LD_PRELOAD=/usr/lib64/libwayland-client.so.0 \
-./TSIA_*.AppImage
-```
-
-**Getting a proper app icon and Activities entry.** AppImages don't
-integrate with the desktop by default: they're just executables sitting
-in your Downloads folder. To get an icon and Start-menu entry, install
-[Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) from
-Flathub; it extracts the icon, registers a `.desktop` entry, and
-handles updates cleanly.
-
-Note the Wayland workaround above still applies if you launch the
-integrated app and see a blank window. Edit the `.desktop` file Gear
-Lever created and prefix the `Exec=` line with the env vars, or set
-them globally in your shell profile.
-
 ### Updates
 
 After the first install on any platform, TSIA checks for updates on
@@ -125,7 +111,7 @@ Prerequisites:
 
 - [Rust](https://rustup.rs) stable (edition 2021).
 - [Node.js](https://nodejs.org) 20+.
-- Platform-specific build tools: see
+- Platform-specific build tools — see
   [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/).
   In short: MSVC on Windows, Xcode CLI tools on macOS, WebKitGTK +
   libgtk + librsvg dev packages on Linux.
@@ -190,12 +176,12 @@ The updater requires a signing keypair generated once with
 `cargo tauri signer generate`. The public key lives in
 `src-tauri/tauri.conf.json`; the private key is a GitHub Actions secret
 called `TAURI_SIGNING_PRIVATE_KEY`. **If you lose the private key**,
-every existing install loses the ability to auto-update: back it up.
+every existing install loses the ability to auto-update — back it up.
 
 ## Contributing
 
 Issues and pull requests on
-[Codeberg](https://codeberg.org/professional-cynic/tsia), please. The
+[Codeberg](https://codeberg.org/professional-cynic/tsia), please — the
 GitHub mirror has issues disabled.
 
 Run `npm run check` (svelte-check) and
