@@ -1,8 +1,10 @@
 <script lang="ts">
   import { app } from '$lib/stores/app.svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import AboutModal from './AboutModal.svelte';
 
   let openError = $state('');
+  let showAbout = $state(false);
 
   async function open(url: string) {
     openError = '';
@@ -29,7 +31,14 @@
     © 2026 <button class="link" onclick={() => open('https://codeberg.org/professional-cynic')}>professional-cynic</button>
     · <button class="link" onclick={() => open('https://www.gnu.org/licenses/agpl-3.0.html')}>AGPL-3.0</button>
   </div>
+  <div class="home-about">
+    <button class="link" onclick={() => showAbout = true}>About</button>
+  </div>
 </div>
+
+{#if showAbout}
+  <AboutModal onclose={() => showAbout = false} />
+{/if}
 
 <style>
   .home { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
@@ -38,6 +47,7 @@
   .home-actions { display: flex; gap: 10px; }
   .home-error { font-size: 11px; color: var(--danger); max-width: 520px; text-align: center; word-break: break-word; }
   .home-footer { margin-top: 32px; font-size: 10px; color: var(--text2); }
+  .home-about { margin-top: 6px; font-size: 10px; }
   .link { background: none; border: none; color: var(--text2); text-decoration: underline; cursor: pointer; font-size: 10px; padding: 0; font-family: inherit; }
   .link:hover { color: var(--text); }
 </style>

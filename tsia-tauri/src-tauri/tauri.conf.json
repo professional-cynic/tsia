@@ -35,6 +35,8 @@
   },
   "bundle": {
     "active": true,
+    "targets": ["nsis", "dmg", "appimage"],
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -42,5 +44,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/YOUR_GITHUB_USERNAME/tsia/releases/latest/download/latest.json"
+      ],
+      "pubkey": "PASTE_CONTENTS_OF_tsia.key.pub_HERE"
+    }
   }
 }

@@ -155,17 +155,6 @@ Run `npm run check` (svelte-check) and `cargo check --manifest-path src-tauri/Ca
 before opening a PR. There's no formal test suite yet; this is a
 weekend-project codebase.
 
-## Disclaimer
-
-This is a weekend project. It's provided as-is, without warranty of any
-kind. If TSIA corrupts your annotations, eats your dataset, sets your
-laptop on fire, or produces incorrect bounding boxes that you then train a
-model on and ship to production, that's on you. Back up your data and
-sanity-check exports before relying on them.
-
-The AGPL-3.0 licence below makes this legally explicit; this paragraph
-just says it in plainer English.
-
 ## Licence
 
 [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html). In short: you may

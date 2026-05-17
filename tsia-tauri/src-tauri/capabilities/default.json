@@ -5,6 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:app:allow-version",
     "core:window:allow-start-dragging",
     "core:window:allow-minimize",
     "core:window:allow-close",
@@ -17,6 +18,10 @@
     "fs:allow-mkdir",
     "fs:allow-read-dir",
     "fs:allow-remove",
+    "updater:default",
+    "updater:allow-check",
+    "updater:allow-download-and-install",
+    "process:allow-restart",
     {
       "identifier": "fs:scope",
       "allow": [
@@ -29,6 +34,7 @@
       "allow": [
         { "url": "https://codeberg.org/professional-cynic" },
         { "url": "https://codeberg.org/professional-cynic/" },
+        { "url": "https://codeberg.org/professional-cynic/tsia" },
         { "url": "https://www.gnu.org/licenses/agpl-3.0.html" }
       ]
     }
