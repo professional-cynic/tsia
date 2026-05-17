@@ -150,7 +150,6 @@ src-tauri/            Rust backend
     opener_bridge.rs    URL allowlist for opening external links
   capabilities/         Tauri permission grants
 .github/workflows/    GitHub Actions for releases
-docs/                 Internal notes
 ```
 
 ## Contributing
