@@ -24,7 +24,7 @@ Built with [Tauri 2](https://tauri.app) and [SvelteKit](https://kit.svelte.dev).
   when creating a project. A reconcile flow handles the case where your
   image set has drifted from what the annotations refer to.
 - Export to **COCO JSON** or **YOLO** with cancellable progress.
-- Optional **hardlink mode** on export — produces a dataset folder where
+- Optional **hardlink mode** on export: produces a dataset folder where
   each image is a hardlink rather than a copy, saving disk space on large
   datasets.
 - Mark images as **reviewed** to track progress through a dataset. The
@@ -65,7 +65,7 @@ Pick the file matching your OS.
 
 Download the `.exe` (filename `TSIA_<version>_x64-setup.exe`) and run it.
 
-SmartScreen will probably warn you about an "unknown publisher" — that's
+SmartScreen will probably warn you about an "unknown publisher": that's
 because the binary isn't code-signed (a code-signing certificate is
 ~$200/year and not worth it for a project this small). Click **More info
 → Run anyway**. After install, updates happen via an in-app banner; you
@@ -111,7 +111,7 @@ Prerequisites:
 
 - [Rust](https://rustup.rs) stable (edition 2021).
 - [Node.js](https://nodejs.org) 20+.
-- Platform-specific build tools — see
+- Platform-specific build tools: see
   [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/).
   In short: MSVC on Windows, Xcode CLI tools on macOS, WebKitGTK +
   libgtk + librsvg dev packages on Linux.
@@ -153,35 +153,10 @@ src-tauri/            Rust backend
 docs/                 Internal notes
 ```
 
-## Releasing
-
-See `docs/codeberg-mirror.md` for the one-time setup (Codeberg is
-canonical; a push-mirror to GitHub triggers the release pipeline). Once
-that's wired up, releasing is:
-
-```bash
-# Bump version in src-tauri/tauri.conf.json AND src-tauri/Cargo.toml
-# AND package.json
-git commit -am "v0.3.1"
-git push
-git tag v0.3.1
-git push origin v0.3.1
-```
-
-GitHub Actions builds installers for all three platforms and drafts a
-Release with them attached. Review the draft on GitHub, click Publish.
-In-app updates roll out within minutes.
-
-The updater requires a signing keypair generated once with
-`cargo tauri signer generate`. The public key lives in
-`src-tauri/tauri.conf.json`; the private key is a GitHub Actions secret
-called `TAURI_SIGNING_PRIVATE_KEY`. **If you lose the private key**,
-every existing install loses the ability to auto-update — back it up.
-
 ## Contributing
 
 Issues and pull requests on
-[Codeberg](https://codeberg.org/professional-cynic/tsia), please — the
+[Codeberg](https://codeberg.org/professional-cynic/tsia). The
 GitHub mirror has issues disabled.
 
 Run `npm run check` (svelte-check) and
@@ -194,7 +169,7 @@ This is a weekend project. It's provided as-is, without warranty of any
 kind. If TSIA corrupts your annotations, eats your dataset, sets your
 laptop on fire, or produces incorrect bounding boxes that you then train a
 model on and ship to production, that's on you. Back up your data and
-sanity-check exports before relying on them.
+sanity-check exports before relying on them. 
 
 The AGPL-3.0 licence below makes this legally explicit; this paragraph
 just says it in plainer English.
