@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Toni's Simple Image Annotator",
-  "version": "0.3.0",
+  "version": "0.1.0",
   "identifier": "com.pc.tsia",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -48,9 +48,9 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/professional-cynic/tsia/releases/latest/download/latest.json"
+        "https://github.com/YOUR_GITHUB_USERNAME/tsia/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY3NkNGQjQ3RjkwQzZGMDUKUldRRmJ3ejVSL3RzWjlEZjhYNU5HRHhhR"
+      "pubkey": "PASTE_CONTENTS_OF_tsia.key.pub_HERE"
     }
   }
 }
