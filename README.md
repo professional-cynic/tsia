@@ -175,12 +175,7 @@ just says it in plainer English.
 
 ## Licence
 
-[AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html). In short: you may
-use, study, modify, and redistribute the software, but if you run a
-modified version on a network and let users interact with it remotely,
-you must offer them the source. For a single-user desktop annotator this
-clause never bites in practice; it matters if you ever wrap TSIA behind a
-web service.
+[AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html).
 
 The images you annotate, the labels you produce, and the COCO/YOLO files
 you export are all yours: the AGPL applies only to the program itself.
