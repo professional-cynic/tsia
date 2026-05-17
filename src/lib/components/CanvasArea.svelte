@@ -47,13 +47,25 @@
     return () => { cancelled = true; };
   });
 
-  // Re-render on any visual state change
+  // Re-render on any visual state change, but gate on requestAnimationFrame
+  // so a flurry of mousemove updates within one frame coalesces into a
+  // single draw. On large images, ctx.drawImage dominates the frame cost;
+  // calling it 100+ times per second was the stutter source.
+  let rafScheduled = false;
+  function scheduleRender() {
+    if (rafScheduled) return;
+    rafScheduled = true;
+    requestAnimationFrame(() => {
+      rafScheduled = false;
+      doRender();
+    });
+  }
   $effect(() => {
     app.zoom; app.offsetX; app.offsetY;
     app.selectedBox; app.activeClass;
     app.drawing; app.drag;
     app.current?.images[app.imgIndex]?.boxes;
-    doRender();
+    scheduleRender();
   });
 
   let baseZoom = $state(1); // the zoom level at which image fills the view (= 100%)

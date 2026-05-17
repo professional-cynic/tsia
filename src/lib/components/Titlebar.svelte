@@ -18,7 +18,7 @@
 </script>
 
 <div class="titlebar" data-tauri-drag-region>
-  <button class="titlebar-title" data-tauri-drag-region="false" onclick={() => app.screen = 'home'} title="Home">
+  <button class="titlebar-title" data-tauri-drag-region="false" onclick={async () => { await app.flushSave(); app.screen = 'home'; }} title="Home">
     Toni's Simple Image Annotator
   </button>
   <span class="titlebar-spacer" data-tauri-drag-region></span>

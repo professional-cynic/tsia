@@ -59,16 +59,21 @@ function drawBox(
   ctx.fillStyle = hexToRgba(color, selected ? 0.18 : 0.08);
   ctx.fillRect(sx, sy, sw, sh);
 
-  // Class label
+  // Class label. Drawn above the box by default; if there's no room
+  // (box at the top of the image), flip it inside the top of the box
+  // so it stays visible at any zoom.
   if (label && !isDraft) {
     const fontSize = Math.max(10, 11 * zoom);
     ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
     const tw = ctx.measureText(label).width;
     const th = fontSize + 4;
+    const fitsAbove = sy - th >= 0;
+    const labelY = fitsAbove ? sy - th : sy;
+    const textY = fitsAbove ? sy - 3 : sy + fontSize - 1;
     ctx.fillStyle = color;
-    ctx.fillRect(sx, sy - th, tw + 6, th);
+    ctx.fillRect(sx, labelY, tw + 6, th);
     ctx.fillStyle = '#000';
-    ctx.fillText(label, sx + 3, sy - 3);
+    ctx.fillText(label, sx + 3, textY);
   }
 
   // Dimensions

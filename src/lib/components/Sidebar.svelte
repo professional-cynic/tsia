@@ -57,7 +57,7 @@
   <div class="section" style="padding:7px 12px;">
     <div class="section-row">
       <span class="section-title" style="margin-bottom:0;">Project</span>
-      <button class="btn-sm" onclick={() => app.screen = 'projects'}>← Back</button>
+      <button class="btn-sm" onclick={async () => { await app.flushSave(); app.screen = 'projects'; }}>← Back</button>
     </div>
     <div class="project-name">{app.current?.name}</div>
   </div>

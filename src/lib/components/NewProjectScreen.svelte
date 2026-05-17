@@ -170,9 +170,11 @@
       {#if classError}<div class="field-error">At least one class is required.</div>{/if}
     </div>
     {#if createError}<div class="create-error">{createError}</div>{/if}
-    <button class="btn-primary" disabled={creating} onclick={tryCreate}>
-      {creating ? 'Creating…' : 'Create Project'}
-    </button>
+    <div class="actions">
+      <button class="btn-primary" disabled={creating} onclick={tryCreate}>
+        {creating ? 'Creating…' : 'Create Project'}
+      </button>
+    </div>
   </div>
 </div>
 
@@ -191,6 +193,7 @@
   .status { font-size: 11px; color: var(--text2); margin-top: 8px; }
   .path-status { font-family: var(--font-mono, monospace); word-break: break-all; }
   .import-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .actions { display: flex; justify-content: flex-end; margin-top: 16px; }
   .class-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
   .class-row .swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
   .class-row input { flex: 1; }
