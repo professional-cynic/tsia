@@ -7,6 +7,12 @@ Built with [Tauri 2](https://tauri.app) and [SvelteKit](https://kit.svelte.dev).
 > **Status**: early. Works, used in production by the author, but the
 > feature surface is deliberately small.
 
+> **Where things live**: source code, issues, and contributions on
+> [Codeberg](https://codeberg.org/professional-cynic/tsia). Release
+> downloads and the in-app updater point at
+> [GitHub Releases](https://github.com/professional-cynic/tsia/releases)
+> (Codeberg auto-mirrors there for the build pipeline).
+
 ## What it does
 
 - Draw, edit, move, and resize axis-aligned bounding boxes on images.
@@ -32,10 +38,13 @@ inference. By design.
 
 ## Install
 
+Downloads for all platforms live on the
+[GitHub Releases page](https://github.com/professional-cynic/tsia/releases/latest).
+Pick the file matching your OS.
+
 ### Windows
 
-Download the `.exe` from the [latest release](https://codeberg.org/professional-cynic/tsia/releases/latest)
-and run it.
+Download the `.exe` (filename `TSIA_<version>_x64-setup.exe`) and run it.
 
 SmartScreen will probably warn you about an "unknown publisher" — that's
 because the binary isn't code-signed (a code-signing certificate is
@@ -45,8 +54,8 @@ won't see the SmartScreen warning again until the next install.
 
 ### macOS (Apple Silicon)
 
-Download the `.dmg` from [the latest release](https://codeberg.org/professional-cynic/tsia/releases/latest),
-open it, drag the app to Applications.
+Download the `.dmg` (filename `TSIA_<version>_aarch64.dmg`), open it, drag
+the app to Applications.
 
 On first launch, macOS will refuse to open it because it isn't signed by
 an Apple Developer ID. To bypass: **right-click the app in Applications,
@@ -57,7 +66,8 @@ Intel Macs are not currently built. Open an issue if you need this.
 
 ### Linux
 
-Download the `.AppImage`, make it executable, run:
+Download the `.AppImage` (filename `TSIA_<version>_amd64.AppImage`), make
+it executable, run:
 
 ```bash
 chmod +x TSIA_*.AppImage
@@ -82,7 +92,8 @@ Prerequisites:
 
 - [Rust](https://rustup.rs) stable (edition 2021).
 - [Node.js](https://nodejs.org) 20+.
-- Platform-specific build tools — see [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/).
+- Platform-specific build tools — see
+  [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/).
   In short: MSVC on Windows, Xcode CLI tools on macOS, WebKitGTK +
   libgtk + librsvg dev packages on Linux.
 
@@ -97,7 +108,7 @@ npm run tauri build    # release binary in src-tauri/target/release/
 ```
 
 First cold build takes a few minutes (Rust compiles a lot of crates).
-Subsequent builds are 10–30 seconds. The dev mode is comfortable to iterate
+Subsequent builds are 10–30 seconds. Dev mode is comfortable to iterate
 in — Svelte changes hot-reload, Rust changes trigger a recompile.
 
 ## Project layout
@@ -131,12 +142,14 @@ that's wired up, releasing is:
 
 ```bash
 # Bump version in src-tauri/tauri.conf.json AND src-tauri/Cargo.toml
-git commit -am "v0.1.2"
-git tag v0.1.2
-git push && git push --tags
+# AND package.json
+git commit -am "v0.3.1"
+git push
+git tag v0.3.1
+git push origin v0.3.1
 ```
 
-GitHub Actions builds installers for all three platforms, drafts a
+GitHub Actions builds installers for all three platforms and drafts a
 Release with them attached. Review the draft on GitHub, click Publish.
 In-app updates roll out within minutes.
 
@@ -148,12 +161,13 @@ every existing install loses the ability to auto-update — back it up.
 
 ## Contributing
 
-Issues and pull requests on [Codeberg](https://codeberg.org/professional-cynic/tsia),
-please — the GitHub mirror has issues disabled.
+Issues and pull requests on
+[Codeberg](https://codeberg.org/professional-cynic/tsia), please — the
+GitHub mirror has issues disabled.
 
-Run `npm run check` (svelte-check) and `cargo check --manifest-path src-tauri/Cargo.toml`
-before opening a PR. There's no formal test suite yet; this is a
-weekend-project codebase.
+Run `npm run check` (svelte-check) and
+`cargo check --manifest-path src-tauri/Cargo.toml` before opening a PR.
+There's no formal test suite yet; this is a weekend-project codebase.
 
 ## Disclaimer
 
@@ -175,5 +189,5 @@ you must offer them the source. For a single-user desktop annotator this
 clause never bites in practice; it matters if you ever wrap TSIA behind a
 web service.
 
-The image you annotate, the labels you produce, and the COCO/YOLO files
+The images you annotate, the labels you produce, and the COCO/YOLO files
 you export are all yours — the AGPL applies only to the program itself.
