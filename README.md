@@ -33,6 +33,7 @@ Built with [Tauri 2](https://tauri.app) and [SvelteKit](https://kit.svelte.dev).
   focus on what still needs work.
 - **Autosave** with a 1-second debounce. No save button.
 - **Undo** stack (50 steps).
+- Almost all actions can be performed with a keyboard, without needing a mouse.
 
 It does *not* do segmentation, polygon annotation, rotated boxes,
 multi-user collaboration, dataset versioning, training pipelines, or
