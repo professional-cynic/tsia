@@ -1,4 +1,4 @@
-# TSIA — Toni's Simple Image Annotator
+# TSIA: Toni's Simple Image Annotator
 
 A small desktop app for drawing bounding boxes on images and exporting them
 in COCO or YOLO format. Single user, no server, no telemetry, no cloud.
@@ -109,7 +109,7 @@ npm run tauri build    # release binary in src-tauri/target/release/
 
 First cold build takes a few minutes (Rust compiles a lot of crates).
 Subsequent builds are 10–30 seconds. Dev mode is comfortable to iterate
-in — Svelte changes hot-reload, Rust changes trigger a recompile.
+in: Svelte changes hot-reload, Rust changes trigger a recompile.
 
 ## Project layout
 
@@ -190,4 +190,4 @@ clause never bites in practice; it matters if you ever wrap TSIA behind a
 web service.
 
 The images you annotate, the labels you produce, and the COCO/YOLO files
-you export are all yours — the AGPL applies only to the program itself.
+you export are all yours: the AGPL applies only to the program itself.
