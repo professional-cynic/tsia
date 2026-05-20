@@ -1,5 +1,6 @@
 <script lang="ts">
   import { installUpdate } from '$lib/updater';
+  import { invoke } from '@tauri-apps/api/core';
   import type { Update } from '@tauri-apps/plugin-updater';
 
   let { update, ondismiss }: {
@@ -15,11 +16,20 @@
     error = '';
     try {
       await installUpdate(update);
-      // installUpdate relaunches; anything after this is only reached on
-      // platforms where relaunch doesn't actually exit (shouldn't happen).
     } catch (e) {
       installing = false;
       error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  // Opens the GitHub releases page. The /latest/ slug always resolves to
+  // the most recent release, which is the one we're prompting about. Avoids
+  // having to allowlist every per-version release URL on the Rust side.
+  async function viewNotes() {
+    try {
+      await invoke('open_external_url', { url: 'https://github.com/professional-cynic/tsia/releases/latest' });
+    } catch {
+      /* Banner stays open; user can still install. */
     }
   }
 </script>
@@ -36,6 +46,7 @@
   </span>
   {#if !installing}
     <div class="actions">
+      <button class="link" onclick={viewNotes}>What's changed</button>
       <button class="btn-primary" onclick={install}>Install</button>
       <button onclick={ondismiss}>Later</button>
     </div>
@@ -49,6 +60,12 @@
     font-size: 11px; gap: 12px;
   }
   .msg { flex: 1; }
-  .actions { display: flex; gap: 6px; }
+  .actions { display: flex; gap: 6px; align-items: center; }
   .actions button { font-size: 11px; padding: 3px 10px; }
+  .actions .link {
+    background: none; border: none; padding: 0 4px;
+    color: #000; text-decoration: underline; cursor: pointer;
+    font-size: 11px; font-family: inherit;
+  }
+  .actions .link:hover { opacity: 0.7; }
 </style>

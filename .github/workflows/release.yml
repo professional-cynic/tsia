@@ -106,4 +106,5 @@ jobs:
             when a new version is available.
           releaseDraft: true        # publish manually after sanity check
           prerelease: false
+          generateReleaseNotes: true
           args: ${{ matrix.args }}
