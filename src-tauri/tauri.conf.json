@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "TSIA",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "identifier": "com.pc.tsia",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -40,6 +40,9 @@
       "dmg",
       "appimage"
     ],
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
