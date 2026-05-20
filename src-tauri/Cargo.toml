@@ -1,6 +1,6 @@
 [package]
-name = "TSIA"
-version = "0.3.2"
+name = "tsia"
+version = "0.3.3"
 description = "Toni's Simple Image Annotator"
 authors = ["professional-cynic"]
 license = "AGPL-3.0"

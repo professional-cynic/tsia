@@ -38,6 +38,10 @@
       Bounding-box annotator for image datasets. Imports and exports COCO
       and YOLO formats. Single-user desktop app, no server, no telemetry.
     </div>
+    <div class="modal-disclaimer">
+      Provided as-is, without warranty. Use at your own risk. Back up your
+      data; verify exports before training on them.
+    </div>
     <div class="modal-links">
       <button class="link" onclick={() => open('https://codeberg.org/professional-cynic/tsia')}>Source code &amp; README</button>
       <button class="link" onclick={() => open('https://codeberg.org/professional-cynic')}>professional-cynic</button>
@@ -64,7 +68,8 @@
   }
   .modal-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; color: var(--accent); }
   .modal-version { font-size: 11px; color: var(--text2); margin-bottom: 12px; }
-  .modal-body { font-size: 12px; color: var(--text2); margin-bottom: 16px; line-height: 1.5; }
+  .modal-body { font-size: 12px; color: var(--text2); margin-bottom: 12px; line-height: 1.5; }
+  .modal-disclaimer { font-size: 11px; color: var(--text2); margin-bottom: 16px; line-height: 1.5; font-style: italic; opacity: 0.85; }
   .modal-links { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
   .modal-error { font-size: 11px; color: var(--danger); margin-bottom: 12px; word-break: break-word; }
   .modal-actions { display: flex; justify-content: flex-end; }

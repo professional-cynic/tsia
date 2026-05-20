@@ -23,14 +23,12 @@ writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 // version line, not any dependency's.
 const cargoPath = 'src-tauri/Cargo.toml';
 const cargo = readFileSync(cargoPath, 'utf8');
-const cargoUpdated = cargo.replace(
-  /^(version\s*=\s*)"[^"]+"/m,
-  `$1"${v}"`,
-);
-if (cargoUpdated === cargo) {
+const VERSION_RE = /^(version\s*=\s*)"[^"]+"/m;
+if (!VERSION_RE.test(cargo)) {
   console.error(`Could not find version line in ${cargoPath}`);
   process.exit(1);
 }
+const cargoUpdated = cargo.replace(VERSION_RE, `$1"${v}"`);
 writeFileSync(cargoPath, cargoUpdated);
 
 // src-tauri/tauri.conf.json — JSON.

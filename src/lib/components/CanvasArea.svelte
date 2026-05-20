@@ -267,7 +267,7 @@
 </div>
 
 <style>
-  .canvas-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); position: relative; }
+  .canvas-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--canvas-bg); position: relative; }
   .toolbar { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 7px 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .info { font-size: 11px; color: var(--text2); white-space: nowrap; }
   .zoom-label { font-size: 11px; color: var(--text2); margin-left: auto; }

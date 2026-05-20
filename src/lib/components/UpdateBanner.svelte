@@ -45,7 +45,7 @@
 <style>
   .update-banner {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 6px 12px; background: var(--accent); color: var(--bg);
+    padding: 6px 12px; background: var(--accent); color: #000;
     font-size: 11px; gap: 12px;
   }
   .msg { flex: 1; }

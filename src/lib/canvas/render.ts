@@ -22,6 +22,12 @@ export function renderCanvas(p: RenderParams) {
   canvas.width = wrap.clientWidth;
   canvas.height = wrap.clientHeight;
 
+  // Pull theme-dependent colours from CSS vars on the canvas's parent.
+  // Cheap once per render; lets the @media (prefers-color-scheme) switch
+  // drive canvas rendering too without a JS theme observer.
+  const styles = getComputedStyle(wrap);
+  const handleFill = styles.getPropertyValue('--handle-fill').trim() || '#fff';
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const dw = image.naturalWidth * zoom;
   const dh = image.naturalHeight * zoom;
@@ -31,13 +37,13 @@ export function renderCanvas(p: RenderParams) {
   for (const box of imageEntry.boxes) {
     drawBox(ctx, box.x, box.y, box.w, box.h,
       CLASS_COLORS[box.classIdx] || '#fff', box.id === selectedBox,
-      classes[box.classIdx] || '', false, zoom, offsetX, offsetY);
+      classes[box.classIdx] || '', false, zoom, offsetX, offsetY, handleFill);
   }
 
   // In-progress drawing
   if (drawing) {
     drawBox(ctx, drawing.x, drawing.y, drawing.w, drawing.h,
-      CLASS_COLORS[activeClass] || '#fff', false, '', true, zoom, offsetX, offsetY);
+      CLASS_COLORS[activeClass] || '#fff', false, '', true, zoom, offsetX, offsetY, handleFill);
   }
 }
 
@@ -46,6 +52,7 @@ function drawBox(
   ix: number, iy: number, iw: number, ih: number,
   color: string, selected: boolean, label: string, isDraft: boolean,
   zoom: number, offsetX: number, offsetY: number,
+  handleFill: string,
 ) {
   const sx = offsetX + ix * zoom, sy = offsetY + iy * zoom;
   const sw = iw * zoom, sh = ih * zoom;
@@ -96,7 +103,7 @@ function drawBox(
     for (const [hx, hy] of getHandlePositions(ix, iy, iw, ih)) {
       const shx = offsetX + hx * zoom;
       const shy = offsetY + hy * zoom;
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = handleFill;
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.5;
       ctx.fillRect(shx - HANDLE_SIZE / 2, shy - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
