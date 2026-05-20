@@ -172,9 +172,6 @@ laptop on fire, or produces incorrect bounding boxes that you then train a
 model on and ship to production, that's on you. Back up your data and
 sanity-check exports before relying on them. 
 
-The AGPL-3.0 licence below makes this legally explicit; this paragraph
-just says it in plainer English.
-
 ## Licence
 
 [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html).
