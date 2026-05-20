@@ -52,9 +52,9 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/YOUR_GITHUB_USERNAME/tsia/releases/latest/download/latest.json"
+        "https://github.com/professional-cynic/tsia/releases/latest/download/latest.json"
       ],
-      "pubkey": "PASTE_CONTENTS_OF_tsia.key.pub_HERE"
+      "pubkey": "ZFc1MGNuVnpkR1ZrSUdOdmJXMWxiblE2SUcxcGJtbHphV2R1SUhCMVlteHBZeUJyWlhrNklEWTNOa05HUWpRM1Jqa3dRelpHTURVS1VsZFJSbUozZWpWU0wzUnpXamxFWmpoWU5VNUhSSGhoUjNVNFJpOTROWFJ0YW0xdlZrSn"
     }
   }
 }
