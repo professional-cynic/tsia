@@ -33,4 +33,4 @@ export interface Project {
 export type Screen = 'home' | 'projects' | 'new' | 'annotate';
 
 export type AnnotationFilter = 'all' | 'annotated' | 'unannotated';
-export type ReviewFilter = 'all' | 'reviewed' | 'unreviewed';
+export type ReviewFilter = 'all' | 'reviewed' | 'unreviewed' | 'rereview';

@@ -63,7 +63,7 @@ function parseImage(v: unknown): ImageEntry | null {
 }
 
 const ANN_FILTERS: AnnotationFilter[] = ['all', 'annotated', 'unannotated'];
-const REV_FILTERS: ReviewFilter[] = ['all', 'reviewed', 'unreviewed'];
+const REV_FILTERS: ReviewFilter[] = ['all', 'reviewed', 'unreviewed', 'rereview'];
 
 function parseProject(v: unknown): Project | null {
   if (!isObject(v)) return null;

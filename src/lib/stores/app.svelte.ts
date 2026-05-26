@@ -64,8 +64,9 @@ class AppState {
 
   get filteredImages(): { img: ImageEntry; i: number }[] {
     return this.baseFilteredImages.filter(({ img }) => {
-      if (this.filterReview === 'reviewed' && !img.reviewed) return false;
-      if (this.filterReview === 'unreviewed' && img.reviewed) return false;
+      if (this.filterReview === 'reviewed' && img.reviewed !== true) return false;
+      if (this.filterReview === 'unreviewed' && img.reviewed !== undefined) return false;
+      if (this.filterReview === 'rereview' && img.reviewed !== false) return false;
       return true;
     });
   }
@@ -191,23 +192,37 @@ class AppState {
     this.selectedBox = null;
     this.drawing = null;
     this.drag = null;
-    // Auto-mark as reviewed on first view. The 'x' key still toggles between
-    // reviewed and "needs re-review", so a user who wants to flag an image
-    // for revisiting can still do so explicitly.
+    // Auto-mark as reviewed only on first view (previously undefined).
+    // Images explicitly flagged for re-review (reviewed === false) stay
+    // flagged when clicked — the user is going through the rereview
+    // list deliberately, and clearing the flag should be an explicit
+    // action ('x' key or sidebar dblclick), not a side effect of
+    // selecting the image to look at it.
     const img = this.current.images[idx];
-    if (img.reviewed !== true) {
+    if (img.reviewed === undefined) {
       img.reviewed = true;
       this.scheduleSave();
     }
+  }
+
+  /// If the current image isn't in the filtered set, jump to the first
+  /// one that is. Called from Sidebar in a $effect whenever any filter
+  /// changes — the user expects to be moved to a valid image rather than
+  /// seeing the previously-viewed one still appear at the top of the
+  /// list when it shouldn't.
+  snapToFilter() {
+    if (!this.current) return;
+    const filtered = this.filteredImages;
+    if (filtered.length === 0) return;
+    if (filtered.some(({ i }) => i === this.imgIndex)) return;
+    this.setImageIndex(filtered[0].i, false);
   }
 
   navigateImage(delta: number) {
     if (!this.current) return;
     const filtered = this.filteredImages;
     if (filtered.length === 0) return;
-    const pos = filtered.findIndex(({ i }) => i === this.imgIndex);
-
-    if (delta < 0) {
+    const pos = filtered.findIndex(({ i }) => i === this.imgIndex);    if (delta < 0) {
       if (this.navBack.length > 0) {
         const prev = this.navBack.pop()!;
         this.navForward.push(this.imgIndex);

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { CLASS_COLORS, MAX_CLASSES, classShortcutLabel } from '$lib/constants';
   import { app } from '$lib/stores/app.svelte';
   import InputModal from './InputModal.svelte';
@@ -10,6 +11,7 @@
   let showAddClassModal = $state(false);
   let removeClassTarget = $state<number | null>(null);
   let renameClassTarget = $state<number | null>(null);
+  let showToggleConfirm = $state(false);
 
   let classFilterOptions = $derived.by(() => {
     const opts = [{ value: 'all', label: 'All classes' }];
@@ -43,14 +45,7 @@
     removeClassTarget = null;
   }
 
-  let visibleImages = $derived.by(() => {
-    const filtered = app.filteredImages;
-    const currentInFilter = filtered.some(({ i }) => i === app.imgIndex);
-    const hasActiveFilter = app.filterAnnotation !== 'all' || app.filterReview !== 'all' || app.filterClass !== 'all';
-    if (filtered.length === 0 && hasActiveFilter) return [];
-    if (currentInFilter) return filtered;
-    return [...filtered, { img: app.current!.images[app.imgIndex], i: app.imgIndex }].sort((a, b) => a.i - b.i);
-  });
+  let visibleImages = $derived(app.filteredImages);
 
   // Single flag for the whole render: is the currently-shown image
   // outside the active filter? Computed once; previously each of the
@@ -60,6 +55,35 @@
   let currentOutOfFilter = $derived(
     !app.filteredImages.some(f => f.i === app.imgIndex)
   );
+
+  // When the user changes a filter, navigate to the first image in the
+  // new filtered set if the current one no longer matches. Without this,
+  // the user is left looking at an image that doesn't fit their filter,
+  // and clicking arrow-nav has confusing results.
+  //
+  // untrack() is load-bearing: snapToFilter reads filteredImages, which
+  // reads img.reviewed and img.boxes on every image. Without untrack,
+  // those become dependencies of this effect — so clicking any image
+  // (which mutates reviewed via auto-mark) re-fires the effect, snaps
+  // to the next image, marks that one too, cascading until the filter
+  // is empty. With untrack, only the three filter values trigger.
+  $effect(() => {
+    app.filterAnnotation; app.filterReview; app.filterClass;
+    untrack(() => app.snapToFilter());
+  });
+
+  // Auto-scroll the current image's row into view whenever the image
+  // changes. Without this, the user has to scroll the sidebar manually
+  // to find where they are after navigating with arrow keys or via the
+  // canvas.
+  let listEl: HTMLElement | undefined = $state();
+  $effect(() => {
+    app.imgIndex; // dependency
+    visibleImages; // re-query after filter changes (DOM re-renders)
+    if (!listEl) return;
+    const row = listEl.querySelector(`[data-img-row="${app.imgIndex}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+  });
 </script>
 
 <div class="sidebar">
@@ -113,9 +137,10 @@
           { value: 'all', label: 'Any review status' },
           { value: 'reviewed', label: 'Reviewed' },
           { value: 'unreviewed', label: 'Not reviewed' },
+          { value: 'rereview', label: 'Requires re-review' },
         ]} />
         <Select bind:value={app.filterClass} options={classFilterOptions} />
-        <button class="btn-sm" style="width:100%; margin-top:4px;" onclick={() => app.toggleFilteredReviewed()}>✓ Toggle reviewed</button>
+        <button class="btn-sm" style="width:100%; margin-top:4px;" onclick={() => showToggleConfirm = true}>✓ Toggle reviewed</button>
       </div>
     {/if}
   </div>
@@ -123,7 +148,7 @@
   <div class="section-title" style="padding:10px 12px 4px;">
     Images ({app.filteredImages.length} shown)
   </div>
-  <div class="img-list">
+  <div class="img-list" bind:this={listEl}>
     {#if visibleImages.length === 0}
       <div class="empty-filter">No images match this filter.</div>
     {:else}
@@ -132,6 +157,7 @@
         {@const outOfFilter = isCurrent && currentOutOfFilter}
         {@const dotClass = img.reviewed === true ? 'reviewed' : img.reviewed === false ? 'needs-review' : ''}
         <button class="img-item" class:active={isCurrent} class:out-of-filter={outOfFilter}
+          data-img-row={i}
           onclick={() => app.setImageIndex(i)}
           ondblclick={() => app.toggleReviewedFor(img)}
           title={img.filename}>
@@ -163,6 +189,17 @@
     message={`Class "${app.current?.classes[removeClassTarget]}" is used. Remove and reassign boxes to first class?`}
     onconfirm={confirmRemoveClass}
     oncancel={() => removeClassTarget = null}
+  />
+{/if}
+
+{#if showToggleConfirm}
+  {@const filteredCount = app.filteredImages.length}
+  {@const allReviewed = app.filteredImages.every(({ img }) => img.reviewed === true)}
+  <ConfirmModal
+    title="Toggle reviewed"
+    message={`${allReviewed ? 'Flag' : 'Mark'} all ${filteredCount} image${filteredCount === 1 ? '' : 's'} in the current filter as ${allReviewed ? 'requiring re-review' : 'reviewed'}?`}
+    onconfirm={() => { app.toggleFilteredReviewed(); showToggleConfirm = false; }}
+    oncancel={() => showToggleConfirm = false}
   />
 {/if}
 
