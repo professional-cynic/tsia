@@ -51,6 +51,15 @@
     if (currentInFilter) return filtered;
     return [...filtered, { img: app.current!.images[app.imgIndex], i: app.imgIndex }].sort((a, b) => a.i - b.i);
   });
+
+  // Single flag for the whole render: is the currently-shown image
+  // outside the active filter? Computed once; previously each of the
+  // ~868 rows ran filteredImages.some(...) per render — O(N^2) on the
+  // image count, which dominated drag latency once a row mutation
+  // re-rendered the sidebar.
+  let currentOutOfFilter = $derived(
+    !app.filteredImages.some(f => f.i === app.imgIndex)
+  );
 </script>
 
 <div class="sidebar">
@@ -120,7 +129,7 @@
     {:else}
       {#each visibleImages as { img, i } (i)}
         {@const isCurrent = i === app.imgIndex}
-        {@const outOfFilter = isCurrent && !app.filteredImages.some(f => f.i === i)}
+        {@const outOfFilter = isCurrent && currentOutOfFilter}
         {@const dotClass = img.reviewed === true ? 'reviewed' : img.reviewed === false ? 'needs-review' : ''}
         <button class="img-item" class:active={isCurrent} class:out-of-filter={outOfFilter}
           onclick={() => app.setImageIndex(i)}

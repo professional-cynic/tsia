@@ -14,10 +14,16 @@ interface RenderParams {
   activeClass: number;
   drawing: { x: number; y: number; w: number; h: number } | null;
   classes: string[];
+  // Transient drag preview: if set, the box with this id is drawn using
+  // these coordinates instead of its committed value. Lets drag update
+  // visuals at 60Hz without mutating the reactive store on every
+  // mousemove (which on large projects cascades through derived getters
+  // and the sidebar render).
+  dragOverride?: { boxId: number; x: number; y: number; w: number; h: number } | null;
 }
 
 export function renderCanvas(p: RenderParams) {
-  const { canvas, ctx, image, imageEntry, zoom, offsetX, offsetY, selectedBox, activeClass, drawing, classes } = p;
+  const { canvas, ctx, image, imageEntry, zoom, offsetX, offsetY, selectedBox, activeClass, drawing, classes, dragOverride } = p;
   const wrap = canvas.parentElement!;
   canvas.width = wrap.clientWidth;
   canvas.height = wrap.clientHeight;
@@ -33,9 +39,10 @@ export function renderCanvas(p: RenderParams) {
   const dh = image.naturalHeight * zoom;
   ctx.drawImage(image, offsetX, offsetY, dw, dh);
 
-  // Committed boxes
+  // Committed boxes (with optional transient drag override applied)
   for (const box of imageEntry.boxes) {
-    drawBox(ctx, box.x, box.y, box.w, box.h,
+    const live = dragOverride && dragOverride.boxId === box.id ? dragOverride : box;
+    drawBox(ctx, live.x, live.y, live.w, live.h,
       CLASS_COLORS[box.classIdx] || '#fff', box.id === selectedBox,
       classes[box.classIdx] || '', false, zoom, offsetX, offsetY, handleFill);
   }

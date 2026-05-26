@@ -10,6 +10,11 @@
   let ctx: CanvasRenderingContext2D;
   let loadedImage: HTMLImageElement | null = $state(null);
   let panStart: { x: number; y: number; ox: number; oy: number } | null = null;
+  // Transient drag/resize preview. During an active drag we update this
+  // local state at mousemove rate; the store's box is only mutated on
+  // mouseup. This keeps the reactive cascade (filteredImages →
+  // visibleImages → sidebar re-render) from firing on every frame.
+  let dragPreview: { boxId: number; x: number; y: number; w: number; h: number } | null = $state(null);
 
   function doRender() {
     if (!canvasEl || !ctx || !loadedImage || !app.current) return;
@@ -21,6 +26,7 @@
       zoom: app.zoom, offsetX: app.offsetX, offsetY: app.offsetY,
       selectedBox: app.selectedBox, activeClass: app.activeClass,
       drawing: app.drawing, classes: app.current.classes,
+      dragOverride: dragPreview,
     });
   }
 
@@ -64,7 +70,14 @@
     app.zoom; app.offsetX; app.offsetY;
     app.selectedBox; app.activeClass;
     app.drawing; app.drag;
-    app.current?.images[app.imgIndex]?.boxes;
+    // Touch the boxes array AND each box's classIdx, so a class
+    // reassignment on the selected box (which doesn't change the
+    // array shape) still re-fires the effect. Other coordinate
+    // mutations are handled either by dragPreview (during drag) or
+    // by add/remove which changes the array length.
+    const boxes = app.current?.images[app.imgIndex]?.boxes;
+    if (boxes) for (const b of boxes) { b.classIdx; }
+    dragPreview;
     scheduleRender();
   });
 
@@ -121,18 +134,14 @@
     const imgW = loadedImage.naturalWidth, imgH = loadedImage.naturalHeight;
 
     if (app.drag) {
-      const img = app.current.images[app.imgIndex];
-      const box = img.boxes.find(b => b.id === app.drag!.boxId);
-      if (!box) return;
       const dx = ix - app.drag.startImgX, dy = iy - app.drag.startImgY;
+      let next: { x: number; y: number; w: number; h: number };
       if (app.drag.type === 'move') {
-        const moved = clampBox({ x: app.drag.origBox.x + dx, y: app.drag.origBox.y + dy, w: app.drag.origBox.w, h: app.drag.origBox.h }, imgW, imgH);
-        box.x = moved.x; box.y = moved.y; box.w = moved.w; box.h = moved.h;
+        next = clampBox({ x: app.drag.origBox.x + dx, y: app.drag.origBox.y + dy, w: app.drag.origBox.w, h: app.drag.origBox.h }, imgW, imgH);
       } else {
-        const updated = applyHandleDrag(app.drag.origBox, app.drag.handleIdx!, dx, dy);
-        const clamped = clampBox(updated, imgW, imgH);
-        box.x = clamped.x; box.y = clamped.y; box.w = clamped.w; box.h = clamped.h;
+        next = clampBox(applyHandleDrag(app.drag.origBox, app.drag.handleIdx!, dx, dy), imgW, imgH);
       }
+      dragPreview = { boxId: app.drag.boxId, ...next };
       return;
     }
 
@@ -149,14 +158,17 @@
     if (app.drag) {
       const img = app.current.images[app.imgIndex];
       const box = img.boxes.find(b => b.id === app.drag!.boxId);
-      if (box && app.drag.undoSnapshot) {
-        const orig = app.drag.origBox;
-        if (box.x !== orig.x || box.y !== orig.y || box.w !== orig.w || box.h !== orig.h) {
-          app.pushUndoSnapshot(img, app.drag.undoSnapshot);
+      const orig = app.drag.origBox;
+      if (box && dragPreview && dragPreview.boxId === box.id) {
+        const changed = dragPreview.x !== orig.x || dragPreview.y !== orig.y || dragPreview.w !== orig.w || dragPreview.h !== orig.h;
+        if (changed) {
+          box.x = dragPreview.x; box.y = dragPreview.y; box.w = dragPreview.w; box.h = dragPreview.h;
+          if (app.drag.undoSnapshot) app.pushUndoSnapshot(img, app.drag.undoSnapshot);
+          app.scheduleSave();
         }
       }
+      dragPreview = null;
       app.drag = null;
-      app.scheduleSave();
       return;
     }
 
