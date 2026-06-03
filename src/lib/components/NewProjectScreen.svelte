@@ -106,7 +106,13 @@
       // safe moment to do so.
       await allowAssetDir(imageDirPath);
       app.projects.push(project);
-      app.resetAnnotationState(project);
+      // Use the array element (a single shared $state proxy) as current,
+      // NOT the raw local `project`. Assigning the plain object to both
+      // app.projects and current separately can produce two proxies over
+      // the same raw object — edits via current then aren't visible when
+      // export reads the array element. Reading it back unifies them.
+      const stored = app.projects[app.projects.length - 1];
+      app.resetAnnotationState(stored);
       app.setImageIndex(0, false);
       app.screen = 'annotate';
     } catch (e) {

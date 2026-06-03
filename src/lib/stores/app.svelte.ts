@@ -114,15 +114,18 @@ class AppState {
     }, AUTOSAVE_DELAY);
   }
 
-  /// If a debounced save is pending, cancel the timer and run the save
-  /// immediately. Awaited by the window-close handler so the user never loses
-  /// work to a close-during-debounce race.
+  /// Force an immediate save of the current project, cancelling any pending
+  /// debounce. Called when navigating away (Back button, window close) so the
+  /// latest edits always reach disk regardless of debounce timing. Writing
+  /// unconditionally (rather than only when a timer is pending) is cheap
+  /// insurance against edits that were made but whose debounce already fired
+  /// against a stale view, or any proxy-identity surprise.
   async flushSave() {
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
       this.saveTimeout = null;
-      await this.writeNow();
     }
+    if (this.current) await this.writeNow();
   }
 
   // ── Actions ─────────────────────────────────────────

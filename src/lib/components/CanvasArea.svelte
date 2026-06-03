@@ -209,8 +209,11 @@
       const slot = e.key === '0' ? 9 : (parseInt(e.key) - 1);
       if (slot < app.current.classes.length) {
         e.preventDefault();
+        // Always update the active class — pressing a digit means "I'm
+        // working with this class now", regardless of selection. If a box
+        // is also selected, reassign it to the new class too.
+        app.activeClass = slot;
         if (app.selectedBox !== null) app.reassignBoxClass(slot);
-        else app.activeClass = slot;
         return;
       }
     }
