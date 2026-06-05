@@ -21,6 +21,13 @@ class AppState {
   offsetY = $state(0);
   activeClass = $state(0);
   selectedBox = $state<number | null>(null);
+  // Multi-selection of box ids (for copy/paste). The single selectedBox
+  // above remains the target for drag/resize/delete/nudge; selectedBoxes
+  // is the set acted on by copy. A plain click sets both (a one-element
+  // selection); Ctrl/Cmd+click edits only the set.
+  selectedBoxes = $state<Set<number>>(new Set());
+  // In-app clipboard: plain geometry+class snapshots, no live refs or ids.
+  clipboard = $state<{ classIdx: number; x: number; y: number; w: number; h: number }[]>([]);
   drawing = $state<{ startX: number; startY: number; x: number; y: number; w: number; h: number } | null>(null);
   drag = $state<{
     type: 'move' | 'handle';
@@ -138,6 +145,8 @@ class AppState {
     this.offsetY = 0;
     this.activeClass = 0;
     this.selectedBox = null;
+    this.selectedBoxes = new Set();
+    this.clipboard = [];
     this.drawing = null;
     this.drag = null;
     this.undoStacks = {};
@@ -193,6 +202,7 @@ class AppState {
     }
     this.imgIndex = idx;
     this.selectedBox = null;
+    this.selectedBoxes = new Set();
     this.drawing = null;
     this.drag = null;
     // Auto-mark as reviewed only on first view (previously undefined).
@@ -280,16 +290,106 @@ class AppState {
 
   deleteSelectedOrLast() {
     if (!this.current) return;
+    const img = this.current.images[this.imgIndex];
+    // Multi-selection: delete all selected boxes in one undo step.
+    if (this.selectedBoxes.size > 1) {
+      this.pushUndo();
+      const ids = this.selectedBoxes;
+      img.boxes = img.boxes.filter(b => !ids.has(b.id));
+      this.selectedBox = null;
+      this.selectedBoxes = new Set();
+      this.scheduleSave();
+      return;
+    }
     if (this.selectedBox !== null) {
       this.deleteBox(this.selectedBox);
+      this.selectedBoxes = new Set();
     } else {
-      const img = this.current.images[this.imgIndex];
       if (img.boxes.length === 0) return;
       this.pushUndo();
       img.boxes.pop();
       this.selectedBox = null;
       this.scheduleSave();
     }
+  }
+
+  // ── Multi-selection + clipboard ─────────────────────
+
+  /// Plain selection: a single box becomes both the drag target and the
+  /// whole multi-selection.
+  selectSingle(id: number) {
+    this.selectedBox = id;
+    this.selectedBoxes = new Set([id]);
+  }
+
+  /// Ctrl/Cmd+click: toggle a box in/out of the multi-selection without
+  /// disturbing the drag target unless the toggled box becomes the only
+  /// one selected.
+  toggleInSelection(id: number) {
+    const next = new Set(this.selectedBoxes);
+    if (next.has(id)) {
+      next.delete(id);
+      if (this.selectedBox === id) {
+        this.selectedBox = next.size ? [...next][next.size - 1] : null;
+      }
+    } else {
+      next.add(id);
+      this.selectedBox = id;
+    }
+    this.selectedBoxes = next;
+  }
+
+  clearSelection() {
+    this.selectedBox = null;
+    this.selectedBoxes = new Set();
+  }
+
+  /// Copy the current multi-selection (or the single selected box) into the
+  /// in-app clipboard as plain geometry+class. Non-destructive; selection
+  /// is left intact.
+  copySelection() {
+    if (!this.current) return;
+    const img = this.current.images[this.imgIndex];
+    const ids = this.selectedBoxes.size ? this.selectedBoxes
+      : (this.selectedBox !== null ? new Set([this.selectedBox]) : new Set<number>());
+    if (ids.size === 0) return;
+    this.clipboard = img.boxes
+      .filter(b => ids.has(b.id))
+      .map(b => ({ classIdx: b.classIdx, x: b.x, y: b.y, w: b.w, h: b.h }));
+  }
+
+  /// Paste clipboard boxes onto the current image at their original
+  /// coordinates, clamped to the image. Zero-area results (after clamping
+  /// to a smaller image) are dropped. New boxes get fresh ids and become
+  /// the selection so the user can immediately adjust them.
+  pasteClipboard() {
+    if (!this.current || this.clipboard.length === 0) return;
+    const img = this.current.images[this.imgIndex];
+    const W = img.dims?.w;
+    const H = img.dims?.h;
+    this.pushUndo();
+    let nextId = this.current.nextBoxId;
+    const newIds: number[] = [];
+    for (const c of this.clipboard) {
+      let { x, y, w, h } = c;
+      if (W !== undefined && H !== undefined) {
+        const x1 = Math.max(0, Math.min(W, x));
+        const y1 = Math.max(0, Math.min(H, y));
+        const x2 = Math.max(0, Math.min(W, x + w));
+        const y2 = Math.max(0, Math.min(H, y + h));
+        x = x1; y = y1; w = x2 - x1; h = y2 - y1;
+        if (w < 2 || h < 2) continue;
+      }
+      const id = nextId++;
+      img.boxes.push({ id, classIdx: Math.min(c.classIdx, this.current.classes.length - 1), x, y, w, h });
+      newIds.push(id);
+    }
+    this.current.nextBoxId = nextId;
+    if (newIds.length) {
+      this.selectedBoxes = new Set(newIds);
+      this.selectedBox = newIds[newIds.length - 1];
+    }
+    this.scheduleSave();
   }
 
   reassignBoxClass(classIdx: number) {

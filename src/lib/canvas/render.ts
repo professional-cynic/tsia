@@ -11,6 +11,8 @@ interface RenderParams {
   offsetX: number;
   offsetY: number;
   selectedBox: number | null;
+  // All boxes in the multi-selection (highlighted). Includes selectedBox.
+  selectedBoxes?: Set<number>;
   activeClass: number;
   drawing: { x: number; y: number; w: number; h: number } | null;
   classes: string[];
@@ -23,7 +25,7 @@ interface RenderParams {
 }
 
 export function renderCanvas(p: RenderParams) {
-  const { canvas, ctx, image, imageEntry, zoom, offsetX, offsetY, selectedBox, activeClass, drawing, classes, dragOverride } = p;
+  const { canvas, ctx, image, imageEntry, zoom, offsetX, offsetY, selectedBox, selectedBoxes, activeClass, drawing, classes, dragOverride } = p;
   const wrap = canvas.parentElement!;
   canvas.width = wrap.clientWidth;
   canvas.height = wrap.clientHeight;
@@ -42,15 +44,17 @@ export function renderCanvas(p: RenderParams) {
   // Committed boxes (with optional transient drag override applied)
   for (const box of imageEntry.boxes) {
     const live = dragOverride && dragOverride.boxId === box.id ? dragOverride : box;
+    const inSelection = box.id === selectedBox || (selectedBoxes?.has(box.id) ?? false);
     drawBox(ctx, live.x, live.y, live.w, live.h,
-      CLASS_COLORS[box.classIdx] || '#fff', box.id === selectedBox,
-      classes[box.classIdx] || '', false, zoom, offsetX, offsetY, handleFill);
+      CLASS_COLORS[box.classIdx] || '#fff', inSelection,
+      classes[box.classIdx] || '', false, zoom, offsetX, offsetY, handleFill,
+      box.id === selectedBox);
   }
 
   // In-progress drawing
   if (drawing) {
     drawBox(ctx, drawing.x, drawing.y, drawing.w, drawing.h,
-      CLASS_COLORS[activeClass] || '#fff', false, '', true, zoom, offsetX, offsetY, handleFill);
+      CLASS_COLORS[activeClass] || '#fff', false, '', true, zoom, offsetX, offsetY, handleFill, false);
   }
 }
 
@@ -60,6 +64,7 @@ function drawBox(
   color: string, selected: boolean, label: string, isDraft: boolean,
   zoom: number, offsetX: number, offsetY: number,
   handleFill: string,
+  showHandles: boolean,
 ) {
   const sx = offsetX + ix * zoom, sy = offsetY + iy * zoom;
   const sw = iw * zoom, sh = ih * zoom;
@@ -70,8 +75,20 @@ function drawBox(
   ctx.strokeRect(sx, sy, sw, sh);
   ctx.setLineDash([]);
 
-  ctx.fillStyle = hexToRgba(color, selected ? 0.18 : 0.08);
+  ctx.fillStyle = hexToRgba(color, selected ? 0.22 : 0.08);
   ctx.fillRect(sx, sy, sw, sh);
+
+  // Selection marquee: a contrasting dashed outline just outside the box,
+  // so selection is obvious even when the class colour is close to the
+  // image or canvas background. handleFill is white on dark themes and
+  // near-black on light themes, so it always contrasts.
+  if (selected && !isDraft) {
+    ctx.strokeStyle = handleFill;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(sx - 2, sy - 2, sw + 4, sh + 4);
+    ctx.setLineDash([]);
+  }
 
   // Class label. Drawn above the box by default; if there's no room
   // (box at the top of the image), flip it inside the top of the box
@@ -91,7 +108,7 @@ function drawBox(
   }
 
   // Dimensions
-  if (selected || isDraft) {
+  if (showHandles || isDraft) {
     const dimText = `${Math.round(iw)}×${Math.round(ih)}`;
     const dimFont = Math.max(9, 10 * zoom);
     ctx.font = `${dimFont}px -apple-system, sans-serif`;
@@ -106,7 +123,7 @@ function drawBox(
   }
 
   // Resize handles
-  if (selected) {
+  if (showHandles) {
     for (const [hx, hy] of getHandlePositions(ix, iy, iw, ih)) {
       const shx = offsetX + hx * zoom;
       const shy = offsetY + hy * zoom;

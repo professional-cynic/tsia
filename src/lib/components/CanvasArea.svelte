@@ -24,7 +24,7 @@
       canvas: canvasEl, ctx, image: loadedImage,
       imageEntry: entry,
       zoom: app.zoom, offsetX: app.offsetX, offsetY: app.offsetY,
-      selectedBox: app.selectedBox, activeClass: app.activeClass,
+      selectedBox: app.selectedBox, selectedBoxes: app.selectedBoxes, activeClass: app.activeClass,
       drawing: app.drawing, classes: app.current.classes,
       dragOverride: dragPreview,
     });
@@ -68,7 +68,7 @@
   }
   $effect(() => {
     app.zoom; app.offsetX; app.offsetY;
-    app.selectedBox; app.activeClass;
+    app.selectedBox; app.selectedBoxes; app.selectedBoxes.size; app.activeClass;
     app.drawing; app.drag;
     // Touch the boxes array AND each box's classIdx, so a class
     // reassignment on the selected box (which doesn't change the
@@ -101,7 +101,7 @@
     const img = app.current.images[app.imgIndex];
     const [ix, iy] = clientToImage(e.clientX, e.clientY, canvasEl, app.offsetX, app.offsetY, app.zoom);
 
-    if (app.selectedBox !== null) {
+    if (app.selectedBox !== null && !e.shiftKey) {
       const selBox = img.boxes.find(b => b.id === app.selectedBox);
       if (selBox) {
         const hi = hitTestHandle(ix, iy, selBox, app.zoom);
@@ -115,13 +115,20 @@
     for (let i = img.boxes.length - 1; i >= 0; i--) {
       const box = img.boxes[i];
       if (hitTestBox(ix, iy, box)) {
-        app.selectedBox = box.id;
+        if (e.shiftKey) {
+          // Toggle this box in the multi-selection; don't start a drag.
+          app.toggleInSelection(box.id);
+          return;
+        }
+        app.selectSingle(box.id);
         app.drag = { type: 'move', boxId: box.id, startImgX: ix, startImgY: iy, origBox: { ...box }, undoSnapshot: app.snapshotBoxes(img.boxes) };
         return;
       }
     }
 
-    app.selectedBox = null;
+    // Click on empty space clears selection (unless Shift is held, so a
+    // mis-click during multi-select doesn't wipe the set) and starts a draw.
+    if (!e.shiftKey) app.clearSelection();
     const [cx, cy] = clampToImage(ix, iy, loadedImage.naturalWidth, loadedImage.naturalHeight);
     app.drawing = { startX: cx, startY: cy, x: cx, y: cy, w: 0, h: 0 };
   }
@@ -180,7 +187,7 @@
         const img = app.current.images[app.imgIndex];
         const box = { id: app.current.nextBoxId++, classIdx: app.activeClass, x: d.x, y: d.y, w: d.w, h: d.h };
         img.boxes.push(box);
-        app.selectedBox = box.id;
+        app.selectSingle(box.id);
         app.scheduleSave();
       }
     }
@@ -201,6 +208,8 @@
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     if (e.ctrlKey || e.metaKey) {
       if (e.key === 'z') { e.preventDefault(); app.undo(); }
+      else if (e.key === 'c') { e.preventDefault(); app.copySelection(); }
+      else if (e.key === 'v') { e.preventDefault(); app.pasteClipboard(); }
       return;
     }
 
@@ -244,7 +253,7 @@
       case 'Escape':
         e.preventDefault();
         if (app.showHelp) { app.showHelp = false; }
-        else { app.selectedBox = null; app.drawing = null; }
+        else { app.clearSelection(); app.drawing = null; }
         break;
     }
   }

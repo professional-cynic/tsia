@@ -28,9 +28,10 @@
     {#each boxes as box, i (box.id)}
       {@const color = CLASS_COLORS[box.classIdx] || '#fff'}
       {@const label = app.current?.classes[box.classIdx] || 'unknown'}
-      <div class="box-item" class:selected={box.id === app.selectedBox}
-        onclick={() => { app.selectedBox = box.id; }}
-        onkeydown={(e) => { if (e.key === 'Enter') app.selectedBox = box.id; }}
+      {@const inSel = box.id === app.selectedBox || app.selectedBoxes.has(box.id)}
+      <div class="box-item" class:selected={inSel}
+        onclick={(e) => { if (e.shiftKey) app.toggleInSelection(box.id); else app.selectSingle(box.id); }}
+        onkeydown={(e) => { if (e.key === 'Enter') app.selectSingle(box.id); }}
         role="button" tabindex="0">
         <div class="b-swatch" style:background={color}></div>
         <span class="b-label">{i + 1}. {label}</span>
