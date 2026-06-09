@@ -17,6 +17,7 @@ export interface ExportOptions {
   format: Format;
   linkMode: LinkMode;
   trainRatio: number;     // 0..1
+  negRatio: number;       // target negative fraction 0..1, or -1 for "include all"
   outDir: string;
   onProgress: (e: ProgressEvent) => void;
 }
@@ -37,8 +38,10 @@ export async function exportDataset(project: Project, opts: ExportOptions): Prom
       outDir: opts.outDir,
       imageDir: project.imageDirPath,
       projectName: project.name,
+      projectId: project.id,
       classes: project.classes,
       trainRatio: opts.trainRatio,
+      negRatio: opts.negRatio,
       images: project.images.map(img => ({
         filename: img.filename,
         boxes: img.boxes.map(b => ({

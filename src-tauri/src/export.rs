@@ -58,9 +58,14 @@ pub struct ExportRequest {
     pub out_dir: PathBuf,
     pub image_dir: PathBuf,
     pub project_name: String,
+    pub project_id: String,
     pub classes: Vec<String>,
     pub images: Vec<ExportImage>,
     pub train_ratio: f32,
+    /// Target fraction of negative (box-less) images in the exported set.
+    /// -1.0 means "no target: include every negative". 0.0..=1.0 trims the
+    /// surplus side to hit exactly that fraction.
+    pub neg_ratio: f32,
 }
 
 #[derive(Serialize, Clone)]
@@ -156,11 +161,28 @@ async fn run(
     cancel: &Arc<AtomicBool>,
     on_event: &Channel<Progress>,
 ) -> Result<bool, String> {
-    let annotated: Vec<ExportImage> = req.images.iter()
-        .filter(|i| !i.boxes.is_empty())
-        .cloned()
-        .collect();
-    let total = annotated.len();
+    // Export every image passed in. Box-less images are kept as negative
+    // (background) samples — standard practice for object detection. The
+    // frontend decides the subset to send (e.g. reviewed-only); this layer
+    // no longer drops empties. COCO represents a negative as an image entry
+    // with no annotations; YOLO as an image with no label file (see writers).
+    let mut all_images: Vec<ExportImage> = req.images.clone();
+    // Shuffle before splitting so file order doesn't bias the train/val
+    // partition (sequential frames or clustered negatives would otherwise
+    // skew it). Seeded from the project id (stable across renames), so the
+    // same project always produces the same split on re-export.
+    shuffle(&mut all_images, seed_from(&req.project_id));
+
+    // Optional negative-sample targeting. If neg_ratio is in [0,1], trim the
+    // surplus side so negatives make up exactly that fraction of the export
+    // (may drop positives — intended, for fine-tuning dataset composition).
+    // Images are already shuffled, so taking the first K of each group is a
+    // random-but-reproducible subset.
+    if (0.0..=1.0).contains(&req.neg_ratio) {
+        all_images = apply_neg_target(all_images, req.neg_ratio);
+    }
+
+    let total = all_images.len();
     on_event.send(Progress::Start {
         total,
         out_path: wrapper.to_string_lossy().to_string(),
@@ -203,7 +225,7 @@ async fn run(
 
     let mut set = JoinSet::new();
 
-    for (idx, img) in annotated.into_iter().enumerate() {
+    for (idx, img) in all_images.into_iter().enumerate() {
         if cancel.load(Ordering::Relaxed) { break; }
 
         let permits = permits.clone();
@@ -416,6 +438,10 @@ async fn write_yolo(
 
     let mut set = JoinSet::new();
     for rec in records {
+        // Negative sample: no boxes → write no label file at all
+        // (Ultralytics treats an image with no matching .txt as background).
+        if rec.img.boxes.is_empty() { continue; }
+
         let is_train = rec.idx < split_idx;
         let dst_dir = if is_train { lbl_train.to_path_buf() } else { lbl_val.to_path_buf() };
 
@@ -472,7 +498,7 @@ annotations/instances_val.json\n",
         Format::Yolo => "\
 images/train/         # training images\n\
 images/val/           # validation images\n\
-labels/train/         # one .txt per image: <class_idx> <cx> <cy> <w> <h>  (normalised)\n\
+labels/train/         # one .txt per annotated image: <class_idx> <cx> <cy> <w> <h> (normalised); negatives have none\n\
 labels/val/\n\
 data.yaml             # Ultralytics dataset descriptor\n\
 classes.txt           # class names, one per line\n",
@@ -510,6 +536,100 @@ Exported from Toni's Simple Image Annotator on {date}.
 // ── Helpers ──────────────────────────────────────────────
 
 fn round1(n: f64) -> f64 { (n * 10.0).round() / 10.0 }
+
+/// Deterministic shuffle for the train/val split. We shuffle so that the
+/// split isn't biased by file order (sequential frames, date-sorted names,
+/// clustered negatives would otherwise skew val vs train). The seed is fixed
+/// so re-exporting the same project yields the same split — reproducible
+/// datasets without pulling in the `rand` crate.
+///
+/// xorshift64* — tiny, fast, good enough for shuffling a file list (this is
+/// not cryptographic and doesn't need to be).
+struct Rng(u64);
+impl Rng {
+    fn new(seed: u64) -> Self {
+        // Avoid the all-zero state, which xorshift can't escape.
+        Rng(seed ^ 0x9E3779B97F4A7C15)
+    }
+    fn next_u64(&mut self) -> u64 {
+        let mut x = self.0;
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+        self.0 = x;
+        x.wrapping_mul(0x2545F4914F6CDD1D)
+    }
+    /// Uniform-ish integer in [0, n). Modulo bias is negligible for the small
+    /// n (image counts) this is used with.
+    fn below(&mut self, n: usize) -> usize {
+        (self.next_u64() % (n as u64)) as usize
+    }
+}
+
+/// In-place Fisher-Yates shuffle with the given seed.
+fn shuffle<T>(items: &mut [T], seed: u64) {
+    let mut rng = Rng::new(seed);
+    let n = items.len();
+    for i in (1..n).rev() {
+        let j = rng.below(i + 1);
+        items.swap(i, j);
+    }
+}
+
+/// Trim a (already-shuffled) image list so negatives make up exactly `t` of
+/// the result, dropping the surplus side. Taking the first K of each group
+/// yields a random-but-reproducible subset because the input is shuffled.
+/// Recombines preserving the original shuffled order so the train/val split
+/// downstream still sees a shuffled sequence.
+fn apply_neg_target(images: Vec<ExportImage>, t: f32) -> Vec<ExportImage> {
+    let p = images.iter().filter(|i| !i.boxes.is_empty()).count();
+    let n = images.len() - p;
+
+    // How many of each to keep (mirrors the frontend preview exactly).
+    let (keep_pos, keep_neg) = if t <= 0.0 {
+        (p, 0)
+    } else if t >= 1.0 {
+        if n > 0 { (0, n) } else { (p, 0) }
+    } else if n == 0 {
+        (p, 0)
+    } else if p == 0 {
+        (0, n)
+    } else {
+        let avail = n as f32 / (p + n) as f32;
+        if avail >= t {
+            (p, ((p as f32) * t / (1.0 - t)).round() as usize)
+        } else {
+            (((n as f32) * (1.0 - t) / t).round() as usize, n)
+        }
+    };
+    let keep_pos = keep_pos.min(p);
+    let keep_neg = keep_neg.min(n);
+
+    let mut seen_pos = 0usize;
+    let mut seen_neg = 0usize;
+    images.into_iter().filter(|img| {
+        if img.boxes.is_empty() {
+            seen_neg += 1;
+            seen_neg <= keep_neg
+        } else {
+            seen_pos += 1;
+            seen_pos <= keep_pos
+        }
+    }).collect()
+}
+
+/// Stable seed derived from the project id, so different projects get
+/// different shuffles but the same project is reproducible across exports
+/// (and across renames, since the id never changes).
+fn seed_from(name: &str) -> u64 {
+    // FNV-1a 64-bit.
+    let mut h: u64 = 0xCBF29CE484222325;
+    for b in name.as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x100000001B3);
+    }
+    h
+}
 
 fn io_err(label: &'static str) -> impl Fn(std::io::Error) -> String {
     move |e| format!("{label}: {e}")

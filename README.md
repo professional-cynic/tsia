@@ -18,19 +18,32 @@ Built with [Tauri 2](https://tauri.app) and [SvelteKit](https://kit.svelte.dev).
 ## What it does
 
 - Draw, edit, move, and resize axis-aligned bounding boxes on images.
+- **Multi-select** boxes (Shift+click) and move them as a group; **copy/paste**
+  boxes within or across images (Ctrl/Cmd+C / V) at their original
+  coordinates, so a defect that recurs across frames is one paste away.
 - Up to 10 classes per project, each with a colour and a 1–9/0 keyboard
   shortcut.
 - Import existing annotations from **COCO JSON** or **YOLO** label files
   when creating a project. A reconcile flow handles the case where your
   image set has drifted from what the annotations refer to.
-- Export to **COCO JSON** or **YOLO** with cancellable progress.
+- Export to **COCO JSON** or **YOLO** with cancellable progress, a
+  configurable train/val split, and an option to **export reviewed images
+  only**. The split is shuffled (so file order doesn't bias train vs val)
+  but deterministic per project, so re-exporting is reproducible.
+- **Negative samples included, with optional targeting**: images you've
+  reviewed with no boxes are exported as background/negative samples (COCO:
+  an image entry with no annotations; YOLO: the image with no label file),
+  which helps reduce false positives during training. An export slider lets
+  you target a specific negative proportion (e.g. 10%); to hit it exactly the
+  export trims the surplus side, which can mean dropping some annotated
+  images: useful for deliberately composing a dataset.
 - Optional **hardlink mode** on export: produces a dataset folder where
   each image is a hardlink rather than a copy, saving disk space on large
   datasets.
 - Mark images as **reviewed** to track progress through a dataset. The
   progress bar in the annotate screen reflects this.
-- Per-image **filters** (reviewed / unreviewed / unlabelled) so you can
-  focus on what still needs work.
+- Per-image **filters** (annotated / unannotated, reviewed / unreviewed /
+  requires re-review, by class) so you can focus on what still needs work.
 - **Autosave** with a 1-second debounce. No save button.
 - **Undo** stack (50 steps).
 - Almost all actions can be performed with a keyboard, without needing a mouse.
@@ -39,6 +52,23 @@ Built with [Tauri 2](https://tauri.app) and [SvelteKit](https://kit.svelte.dev).
 It does *not* do segmentation, polygon annotation, rotated boxes,
 multi-user collaboration, dataset versioning, training pipelines, or
 inference. By design.
+
+### Keyboard & mouse
+
+A full reference is in the app (press `?`). The essentials:
+
+- `A` / `D`: previous / next image
+- `1`–`9`, `0`: set active class (and reassign the selected box, if any)
+- Drag a box to move it. Dragging a box that's part of a multi-selection
+  moves the whole group.
+- Shift+click: add or remove a box from the selection
+- Ctrl/Cmd+C, Ctrl/Cmd+V: copy / paste selected boxes (paste lands on the
+  current image at original coordinates)
+- Arrows: nudge the selection by 1 px (hold Shift for 10 px)
+- `X`: toggle "requires re-review"
+- `Del`: delete selected box(es)
+- `Ctrl/Cmd+Z`: undo
+- Scroll to zoom, middle-drag to pan, `Esc` to deselect, `F11` for fullscreen
 
 ## Why? 
   

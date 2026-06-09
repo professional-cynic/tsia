@@ -22,10 +22,14 @@ interface RenderParams {
   // mousemove (which on large projects cascades through derived getters
   // and the sidebar render).
   dragOverride?: { boxId: number; x: number; y: number; w: number; h: number } | null;
+  // Live group-drag delta (image-space px) applied to every box in
+  // selectedBoxes. Lets a multi-box move render at 60Hz without mutating
+  // the store on each mousemove.
+  groupOffset?: { dx: number; dy: number } | null;
 }
 
 export function renderCanvas(p: RenderParams) {
-  const { canvas, ctx, image, imageEntry, zoom, offsetX, offsetY, selectedBox, selectedBoxes, activeClass, drawing, classes, dragOverride } = p;
+  const { canvas, ctx, image, imageEntry, zoom, offsetX, offsetY, selectedBox, selectedBoxes, activeClass, drawing, classes, dragOverride, groupOffset } = p;
   const wrap = canvas.parentElement!;
   canvas.width = wrap.clientWidth;
   canvas.height = wrap.clientHeight;
@@ -41,14 +45,19 @@ export function renderCanvas(p: RenderParams) {
   const dh = image.naturalHeight * zoom;
   ctx.drawImage(image, offsetX, offsetY, dw, dh);
 
-  // Committed boxes (with optional transient drag override applied)
+  // Committed boxes (with optional transient drag/group overrides applied)
   for (const box of imageEntry.boxes) {
-    const live = dragOverride && dragOverride.boxId === box.id ? dragOverride : box;
     const inSelection = box.id === selectedBox || (selectedBoxes?.has(box.id) ?? false);
+    let live: { x: number; y: number; w: number; h: number } = box;
+    if (dragOverride && dragOverride.boxId === box.id) {
+      live = dragOverride;
+    } else if (groupOffset && inSelection) {
+      live = { x: box.x + groupOffset.dx, y: box.y + groupOffset.dy, w: box.w, h: box.h };
+    }
     drawBox(ctx, live.x, live.y, live.w, live.h,
       CLASS_COLORS[box.classIdx] || '#fff', inSelection,
       classes[box.classIdx] || '', false, zoom, offsetX, offsetY, handleFill,
-      box.id === selectedBox);
+      box.id === selectedBox && !groupOffset);
   }
 
   // In-progress drawing

@@ -392,6 +392,29 @@ class AppState {
     this.scheduleSave();
   }
 
+  /// Compute how far the current selection can move in each direction before
+  /// the group's bounding box hits an image edge. Returns the min/max
+  /// allowable delta. If the image has no known dims, returns unbounded.
+  groupClampBounds(): { minDx: number; maxDx: number; minDy: number; maxDy: number } {
+    const inf = { minDx: -Infinity, maxDx: Infinity, minDy: -Infinity, maxDy: Infinity };
+    if (!this.current) return inf;
+    const img = this.current.images[this.imgIndex];
+    const W = img.dims?.w, H = img.dims?.h;
+    if (W === undefined || H === undefined) return inf;
+    const sel = img.boxes.filter(b => this.selectedBoxes.has(b.id));
+    if (sel.length === 0) return inf;
+    const minX = Math.min(...sel.map(b => b.x));
+    const minY = Math.min(...sel.map(b => b.y));
+    const maxX = Math.max(...sel.map(b => b.x + b.w));
+    const maxY = Math.max(...sel.map(b => b.y + b.h));
+    return {
+      minDx: -minX,         // can't move left past x=0
+      maxDx: W - maxX,      // can't move right past image width
+      minDy: -minY,
+      maxDy: H - maxY,
+    };
+  }
+
   reassignBoxClass(classIdx: number) {
     if (!this.current || this.selectedBox === null) return;
     const img = this.current.images[this.imgIndex];
@@ -409,8 +432,30 @@ class AppState {
   private static NUDGE_COALESCE_MS = 700;
 
   nudgeSelectedBox(dx: number, dy: number) {
-    if (!this.current || this.selectedBox === null) return;
+    if (!this.current) return;
     const img = this.current.images[this.imgIndex];
+
+    // Multi-selection: nudge the whole group, clamping the delta so the
+    // group keeps its shape against image edges (same rule as group drag).
+    if (this.selectedBoxes.size > 1) {
+      const now = Date.now();
+      const sameBurst = this.lastNudgeBoxId === -1
+        && (now - this.lastNudgeAt) < AppState.NUDGE_COALESCE_MS;
+      if (!sameBurst) this.pushUndo();
+      this.lastNudgeAt = now;
+      this.lastNudgeBoxId = -1; // sentinel: a group burst
+      const b = this.groupClampBounds();
+      const cdx = Math.max(b.minDx, Math.min(b.maxDx, dx));
+      const cdy = Math.max(b.minDy, Math.min(b.maxDy, dy));
+      if (cdx === 0 && cdy === 0) return;
+      for (const box of img.boxes) {
+        if (this.selectedBoxes.has(box.id)) { box.x += cdx; box.y += cdy; }
+      }
+      this.scheduleSave();
+      return;
+    }
+
+    if (this.selectedBox === null) return;
     const box = img.boxes.find(b => b.id === this.selectedBox);
     if (!box) return;
 

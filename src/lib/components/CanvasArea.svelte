@@ -15,6 +15,13 @@
   // mouseup. This keeps the reactive cascade (filteredImages →
   // visibleImages → sidebar re-render) from firing on every frame.
   let dragPreview: { boxId: number; x: number; y: number; w: number; h: number } | null = $state(null);
+  // Group drag: when the mousedown lands on a box that's part of a
+  // multi-selection, we move the whole set. startImgX/Y is the grab point;
+  // groupPreview holds the live (clamped) delta for rendering; bounds is the
+  // clamp range computed once at grab time.
+  let groupDrag: { startImgX: number; startImgY: number; undoSnapshot: ReturnType<typeof app.snapshotBoxes> } | null = null;
+  let groupPreview: { dx: number; dy: number } | null = $state(null);
+  let groupBounds: { minDx: number; maxDx: number; minDy: number; maxDy: number } | null = null;
 
   function doRender() {
     if (!canvasEl || !ctx || !loadedImage || !app.current) return;
@@ -27,6 +34,7 @@
       selectedBox: app.selectedBox, selectedBoxes: app.selectedBoxes, activeClass: app.activeClass,
       drawing: app.drawing, classes: app.current.classes,
       dragOverride: dragPreview,
+      groupOffset: groupPreview,
     });
   }
 
@@ -78,6 +86,7 @@
     const boxes = app.current?.images[app.imgIndex]?.boxes;
     if (boxes) for (const b of boxes) { b.classIdx; }
     dragPreview;
+    groupPreview;
     scheduleRender();
   });
 
@@ -120,6 +129,15 @@
           app.toggleInSelection(box.id);
           return;
         }
+        // Grabbing a box that's part of a multi-selection moves the whole
+        // group (no modifier needed, like Figma/PowerPoint). Grabbing any
+        // other box collapses to a single selection and single-box drag.
+        if (app.selectedBoxes.size > 1 && app.selectedBoxes.has(box.id)) {
+          groupDrag = { startImgX: ix, startImgY: iy, undoSnapshot: app.snapshotBoxes(img.boxes) };
+          groupBounds = app.groupClampBounds();
+          groupPreview = { dx: 0, dy: 0 };
+          return;
+        }
         app.selectSingle(box.id);
         app.drag = { type: 'move', boxId: box.id, startImgX: ix, startImgY: iy, origBox: { ...box }, undoSnapshot: app.snapshotBoxes(img.boxes) };
         return;
@@ -135,10 +153,21 @@
 
   function handleMouseMove(e: MouseEvent) {
     if (panStart) { app.offsetX = panStart.ox + (e.clientX - panStart.x); app.offsetY = panStart.oy + (e.clientY - panStart.y); return; }
-    if (!app.drag && !app.drawing) return;
+    if (!app.drag && !app.drawing && !groupDrag) return;
     if (!loadedImage || !app.current) return;
     const [ix, iy] = clientToImage(e.clientX, e.clientY, canvasEl, app.offsetX, app.offsetY, app.zoom);
     const imgW = loadedImage.naturalWidth, imgH = loadedImage.naturalHeight;
+
+    if (groupDrag) {
+      let dx = ix - groupDrag.startImgX;
+      let dy = iy - groupDrag.startImgY;
+      if (groupBounds) {
+        dx = Math.max(groupBounds.minDx, Math.min(groupBounds.maxDx, dx));
+        dy = Math.max(groupBounds.minDy, Math.min(groupBounds.maxDy, dy));
+      }
+      groupPreview = { dx, dy };
+      return;
+    }
 
     if (app.drag) {
       const dx = ix - app.drag.startImgX, dy = iy - app.drag.startImgY;
@@ -161,6 +190,25 @@
   function handleMouseUp(_e: MouseEvent) {
     if (panStart) { panStart = null; return; }
     if (!loadedImage || !app.current) return;
+
+    if (groupDrag) {
+      const img = app.current.images[app.imgIndex];
+      if (groupPreview && (groupPreview.dx !== 0 || groupPreview.dy !== 0) && groupDrag.undoSnapshot) {
+        // Commit the move via the store, but push our pre-grab snapshot for
+        // undo (moveSelectionBy also calls pushUndo; we want the snapshot
+        // taken at grab time, so push ours and let moveSelectionBy skip its).
+        app.pushUndoSnapshot(img, groupDrag.undoSnapshot);
+        const { dx, dy } = groupPreview;
+        for (const b of img.boxes) {
+          if (app.selectedBoxes.has(b.id)) { b.x += dx; b.y += dy; }
+        }
+        app.scheduleSave();
+      }
+      groupDrag = null;
+      groupBounds = null;
+      groupPreview = null;
+      return;
+    }
 
     if (app.drag) {
       const img = app.current.images[app.imgIndex];

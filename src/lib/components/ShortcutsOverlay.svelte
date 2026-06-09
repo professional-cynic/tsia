@@ -17,7 +17,8 @@
       title: 'Selection',
       items: [
         { keys: ['Click'], desc: 'Select one box' },
-        { keys: ['Ctrl', 'Click'], sep: '+', desc: 'Select multiple (add / remove a box)' },
+        { keys: ['Shift', 'Click'], sep: '+', desc: 'Select multiple (add / remove a box)' },
+        { keys: ['Drag'], desc: 'Move box — moves whole group if multi-selected' },
         { keys: ['Esc'], desc: 'Deselect all' },
       ],
     },
@@ -26,8 +27,8 @@
       items: [
         { keys: ['1', '9'], sep: '…', desc: 'Set class / reassign selected' },
         { keys: ['0'], desc: 'Set class 10' },
-        { keys: ['Arrows'], desc: 'Nudge selected box (1 px)' },
-        { keys: ['Shift', 'Arrows'], sep: '+', desc: 'Nudge by 10 px' },
+        { keys: ['Arrows'], desc: 'Nudge selection 1 px (whole group if multi)' },
+        { keys: ['Shift', 'Arrows'], sep: '+', desc: 'Nudge selection by 10 px' },
         { keys: ['Del'], desc: 'Delete selected box(es)' },
         { keys: ['X'], desc: 'Toggle needs re-review' },
         { keys: ['Z'], desc: 'Undo' },
