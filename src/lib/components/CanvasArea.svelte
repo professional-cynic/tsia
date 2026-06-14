@@ -40,7 +40,14 @@
 
   $effect(() => {
     const img = app.current?.images[app.imgIndex];
-    if (!img || !app.current) { loadedImage = null; return; }
+    // Switching image (or having none): drop the old bitmap and wipe the
+    // canvas immediately. The box state has already switched, so leaving the
+    // old bitmap up would briefly show the new image's boxes over the old
+    // image. Clearing now means the load gap shows blank, not a mismatch.
+    loadedImage = null;
+    clearCanvas();
+    if (!img || !app.current) return;
+
     const dirPath = app.current.imageDirPath;
     const filename = img.filename;
     let cancelled = false;
@@ -61,6 +68,11 @@
     return () => { cancelled = true; };
   });
 
+  function clearCanvas() {
+    if (!canvasEl || !ctx) return;
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+  }
+
   // Re-render on any visual state change, but gate on requestAnimationFrame
   // so a flurry of mousemove updates within one frame coalesces into a
   // single draw. On large images, ctx.drawImage dominates the frame cost;
@@ -76,7 +88,7 @@
   }
   $effect(() => {
     app.zoom; app.offsetX; app.offsetY;
-    app.selectedBox; app.selectedBoxes; app.selectedBoxes.size; app.activeClass;
+    app.selectedBox; app.selectedBoxes; app.activeClass;
     app.drawing; app.drag;
     // Touch the boxes array AND each box's classIdx, so a class
     // reassignment on the selected box (which doesn't change the
@@ -94,8 +106,7 @@
 
   function fitToView(img: HTMLImageElement) {
     if (!canvasEl) return;
-    const wrap = canvasEl.parentElement!;
-    const ww = wrap.clientWidth, wh = wrap.clientHeight;
+    const ww = canvasEl.clientWidth, wh = canvasEl.clientHeight;
     const scale = Math.min(ww / img.naturalWidth, wh / img.naturalHeight);
     baseZoom = scale;
     app.zoom = scale;

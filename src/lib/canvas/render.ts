@@ -30,14 +30,17 @@ interface RenderParams {
 
 export function renderCanvas(p: RenderParams) {
   const { canvas, ctx, image, imageEntry, zoom, offsetX, offsetY, selectedBox, selectedBoxes, activeClass, drawing, classes, dragOverride, groupOffset } = p;
-  const wrap = canvas.parentElement!;
-  canvas.width = wrap.clientWidth;
-  canvas.height = wrap.clientHeight;
+  // Size the backing buffer to the canvas's own displayed box. NOT the
+  // parent wrap: the wrap also contains the toolbar strip, so wrap.clientHeight
+  // overstates the drawable area and the image gets scaled into a shorter box
+  // than the fit math assumed (bottom cropped). clientWidth/Height of the
+  // canvas element is the true drawable area.
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
 
-  // Pull theme-dependent colours from CSS vars on the canvas's parent.
-  // Cheap once per render; lets the @media (prefers-color-scheme) switch
-  // drive canvas rendering too without a JS theme observer.
-  const styles = getComputedStyle(wrap);
+  // Pull theme-dependent colours from CSS vars. They inherit, so reading
+  // from the canvas element works and avoids a separate wrap reference.
+  const styles = getComputedStyle(canvas);
   const handleFill = styles.getPropertyValue('--handle-fill').trim() || '#fff';
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
