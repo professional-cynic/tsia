@@ -3,7 +3,7 @@
 // properties without hitting Svelte's "cannot assign to import" restriction.
 
 import type { Project, Screen, ImageEntry, Box, AnnotationFilter, ReviewFilter } from '$lib/types';
-import { MAX_CLASSES, MAX_UNDO, MAX_NAV, AUTOSAVE_DELAY } from '$lib/constants';
+import { MAX_CLASSES, MAX_UNDO, AUTOSAVE_DELAY } from '$lib/constants';
 import { saveProject } from '$lib/persistence';
 
 type BoxSnapshot = Box[];
@@ -50,10 +50,6 @@ class AppState {
     undoSnapshot: BoxSnapshot;
   } | null>(null);
   showHelp = $state(false);
-
-  // Navigation history
-  navBack = $state<number[]>([]);
-  navForward = $state<number[]>([]);
 
   // Unified chronological undo log. A single ordered stack of actions so undo
   // always reverses the most recent operation, whatever its kind (box edit on
@@ -162,8 +158,6 @@ class AppState {
     this.drawing = null;
     this.drag = null;
     this.undoLog = [];
-    this.navBack = [];
-    this.navForward = [];
     // Restore per-project filter state if present.
     this.filterAnnotation = project.filterAnnotation ?? 'all';
     this.filterReview = project.filterReview ?? 'all';
@@ -202,13 +196,35 @@ class AppState {
     const images = this.current.images;
     if (images.length === 0) return;
     const idx = this.imgIndex;
+
+    // Decide where to land BEFORE removing, using the filtered set so we move
+    // to the next image that still matches the active filter (e.g. the next
+    // 'requires re-review'), not just the next raw image. Prefer the next
+    // match after idx; else the previous match before idx; else any image.
+    const filtered = this.filteredImages.map(({ i }) => i);
+    const nextMatch = filtered.find(i => i > idx);
+    const prevMatch = [...filtered].reverse().find(i => i < idx);
+
     const [removed] = images.splice(idx, 1);
     this.pushEntry({ kind: 'image-removed', img: $state.snapshot(removed) as ImageEntry, index: idx });
+
     this.selectedBox = null;
     this.selectedBoxes = new Set();
     this.drawing = null;
     this.drag = null;
-    this.imgIndex = images.length === 0 ? 0 : Math.min(idx, images.length - 1);
+
+    // Translate the pre-removal target index to its post-removal position.
+    let target: number;
+    if (images.length === 0) {
+      target = 0;
+    } else if (nextMatch !== undefined) {
+      target = nextMatch - 1;          // it was above idx, now shifted down
+    } else if (prevMatch !== undefined) {
+      target = prevMatch;              // below idx, index unchanged
+    } else {
+      target = Math.min(idx, images.length - 1); // no filtered match left
+    }
+    this.imgIndex = Math.max(0, Math.min(target, images.length - 1));
     this.scheduleSave();
   }
 
@@ -244,13 +260,8 @@ class AppState {
     this.scheduleSave();
   }
 
-  setImageIndex(idx: number, pushHistory = true) {
+  setImageIndex(idx: number, _pushHistory = true) {
     if (!this.current || idx < 0 || idx >= this.current.images.length) return;
-    if (pushHistory && this.imgIndex !== idx) {
-      this.navBack.push(this.imgIndex);
-      if (this.navBack.length > MAX_NAV) this.navBack.shift();
-      this.navForward = [];
-    }
     this.imgIndex = idx;
     this.selectedBox = null;
     this.selectedBoxes = new Set();
@@ -286,48 +297,22 @@ class AppState {
     if (!this.current) return;
     const filtered = this.filteredImages;
     if (filtered.length === 0) return;
-    const pos = filtered.findIndex(({ i }) => i === this.imgIndex);    if (delta < 0) {
-      if (this.navBack.length > 0) {
-        const prev = this.navBack.pop()!;
-        this.navForward.push(this.imgIndex);
-        if (this.navForward.length > MAX_NAV) this.navForward.shift();
-        this.setImageIndex(prev, false);
-        return;
-      }
-      if (pos === -1) {
-        for (let j = filtered.length - 1; j >= 0; j--) {
-          if (filtered[j].i < this.imgIndex) {
-            this.navBack.push(this.imgIndex);
-            this.navForward = [];
-            this.setImageIndex(filtered[j].i, false);
-            return;
-          }
-        }
-        return;
-      }
-      if (pos - 1 < 0) return;
-      this.navBack.push(this.imgIndex);
-      this.navForward = [];
-      this.setImageIndex(filtered[pos - 1].i, false);
-    } else {
-      if (this.navForward.length > 0) {
-        const next = this.navForward.pop()!;
-        this.navBack.push(this.imgIndex);
-        if (this.navBack.length > MAX_NAV) this.navBack.shift();
-        this.setImageIndex(next, false);
-        return;
-      }
-      let nextPos;
-      if (pos === -1) {
-        nextPos = filtered.findIndex(({ i }) => i > this.imgIndex);
-        if (nextPos === -1) return;
+    const pos = filtered.findIndex(({ i }) => i === this.imgIndex);
+    if (pos === -1) {
+      // Current image isn't in the filtered set (e.g. filter just changed).
+      // Step to the nearest filtered image in the direction of travel.
+      if (delta > 0) {
+        const next = filtered.find(({ i }) => i > this.imgIndex);
+        this.setImageIndex((next ?? filtered[0]).i, false);
       } else {
-        nextPos = pos + 1;
-        if (nextPos >= filtered.length) return;
+        const prev = [...filtered].reverse().find(({ i }) => i < this.imgIndex);
+        this.setImageIndex((prev ?? filtered[filtered.length - 1]).i, false);
       }
-      this.navBack.push(this.imgIndex);
-      this.setImageIndex(filtered[nextPos].i, false);
+      return;
     }
+    const nextPos = pos + delta;
+    if (nextPos < 0 || nextPos >= filtered.length) return; // at an end; stay put
+    this.setImageIndex(filtered[nextPos].i, false);
   }
 
   deleteBox(id: number) {
@@ -565,9 +550,29 @@ class AppState {
 
   toggleReviewed() {
     if (!this.current) return;
-    const img = this.current.images[this.imgIndex];
+    const idx = this.imgIndex;
+    const img = this.current.images[idx];
     img.reviewed = img.reviewed === false ? true : false;
     this.scheduleSave();
+    // If this change pushed the image out of the active filter (e.g. cleared
+    // its re-review flag while filtering for re-review), advance to the next
+    // image that still matches — same behaviour as delete, so working through
+    // a filtered list with 'x' flows continuously. If it still matches (or no
+    // filter is active), stay put.
+    this.advanceIfFilteredOut(idx);
+  }
+
+  /// If the image at `fromIdx` no longer passes the active filter, move to the
+  /// next image that does (preferring forward, then backward). No-op if it
+  /// still matches or the filter is 'all'/empty.
+  private advanceIfFilteredOut(fromIdx: number) {
+    if (!this.current) return;
+    const filtered = this.filteredImages;
+    if (filtered.some(({ i }) => i === fromIdx)) return; // still matches; stay
+    if (filtered.length === 0) return;                    // nothing to move to
+    const next = filtered.find(({ i }) => i > fromIdx);
+    const prev = [...filtered].reverse().find(({ i }) => i < fromIdx);
+    this.setImageIndex((next ?? prev ?? filtered[0]).i, false);
   }
 
   /// Toggle review state on an arbitrary image (not necessarily the current
