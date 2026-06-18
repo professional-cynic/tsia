@@ -67,6 +67,7 @@ A full reference is in the app (press `?`). The essentials:
 - Arrows: nudge the selection by 1 px (hold Shift for 10 px)
 - `X`: toggle "requires re-review"
 - `Del`: delete selected box(es)
+- `Shift+Del`: remove the current image from the project (file on disk is kept; undoable)
 - `Ctrl/Cmd+Z`: undo
 - Scroll to zoom, middle-drag to pan, `Esc` to deselect, `F11` for fullscreen
 

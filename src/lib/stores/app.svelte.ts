@@ -8,6 +8,17 @@ import { saveProject } from '$lib/persistence';
 
 type BoxSnapshot = Box[];
 
+// A single reversible action in the chronological undo log.
+type UndoEntry =
+  // One image's boxes changed (draw, delete, move, resize, nudge, paste,
+  // reassign, group-move). Restores that image's boxes by filename.
+  | { kind: 'boxes'; filename: string; boxes: BoxSnapshot }
+  // Several images' boxes changed atomically (class removal shifts indices
+  // project-wide). Reversed in one undo step.
+  | { kind: 'boxes-multi'; entries: { filename: string; boxes: BoxSnapshot }[] }
+  // An image was removed from the project. Re-inserts it at its old index.
+  | { kind: 'image-removed'; img: ImageEntry; index: number };
+
 class AppState {
   // App-level
   screen = $state<Screen>('home');
@@ -44,10 +55,11 @@ class AppState {
   navBack = $state<number[]>([]);
   navForward = $state<number[]>([]);
 
-  // Undo stacks (keyed by filename). NOT $state — nothing in the UI reads it
-  // reactively, so the proxy overhead is wasted and array mutation here would
-  // otherwise look misleadingly observable.
-  private undoStacks: Record<string, BoxSnapshot[]> = {};
+  // Unified chronological undo log. A single ordered stack of actions so undo
+  // always reverses the most recent operation, whatever its kind (box edit on
+  // any image, multi-image class shift, or image removal). NOT $state — the UI
+  // doesn't read it reactively.
+  private undoLog: UndoEntry[] = [];
 
   // Filters
   filterAnnotation = $state<AnnotationFilter>('all');
@@ -149,13 +161,18 @@ class AppState {
     this.clipboard = [];
     this.drawing = null;
     this.drag = null;
-    this.undoStacks = {};
+    this.undoLog = [];
     this.navBack = [];
     this.navForward = [];
     // Restore per-project filter state if present.
     this.filterAnnotation = project.filterAnnotation ?? 'all';
     this.filterReview = project.filterReview ?? 'all';
     this.filterClass = project.filterClass ?? 'all';
+  }
+
+  private pushEntry(entry: UndoEntry) {
+    this.undoLog.push(entry);
+    if (this.undoLog.length > MAX_UNDO) this.undoLog.shift();
   }
 
   pushUndo() {
@@ -165,31 +182,65 @@ class AppState {
   }
 
   private pushUndoFor(img: ImageEntry, boxes: Box[]) {
-    const key = img.filename;
-    if (!this.undoStacks[key]) this.undoStacks[key] = [];
     // $state.snapshot unwraps proxies; structuredClone(...) throws on $state.
-    this.undoStacks[key].push($state.snapshot(boxes) as Box[]);
-    if (this.undoStacks[key].length > MAX_UNDO) this.undoStacks[key].shift();
+    this.pushEntry({ kind: 'boxes', filename: img.filename, boxes: $state.snapshot(boxes) as Box[] });
   }
 
   pushUndoSnapshot(img: ImageEntry, snapshot: BoxSnapshot) {
-    const key = img.filename;
-    if (!this.undoStacks[key]) this.undoStacks[key] = [];
-    this.undoStacks[key].push(snapshot);
-    if (this.undoStacks[key].length > MAX_UNDO) this.undoStacks[key].shift();
+    this.pushEntry({ kind: 'boxes', filename: img.filename, boxes: snapshot });
   }
 
   snapshotBoxes(boxes: Box[]): BoxSnapshot {
     return $state.snapshot(boxes) as Box[];
   }
 
+  /// Remove the current image from the project (the file on disk is left
+  /// untouched — this only drops the annotation entry). Undoable: logged as a
+  /// single chronological action. Re-navigates to the nearest remaining image.
+  removeCurrentImage() {
+    if (!this.current) return;
+    const images = this.current.images;
+    if (images.length === 0) return;
+    const idx = this.imgIndex;
+    const [removed] = images.splice(idx, 1);
+    this.pushEntry({ kind: 'image-removed', img: $state.snapshot(removed) as ImageEntry, index: idx });
+    this.selectedBox = null;
+    this.selectedBoxes = new Set();
+    this.drawing = null;
+    this.drag = null;
+    this.imgIndex = images.length === 0 ? 0 : Math.min(idx, images.length - 1);
+    this.scheduleSave();
+  }
+
+  /// Reverse the most recent action, whatever its kind — true chronological
+  /// undo across box edits, multi-image class shifts, and image removals.
   undo() {
     if (!this.current) return;
-    const img = this.current.images[this.imgIndex];
-    const key = img.filename;
-    if (!this.undoStacks[key]?.length) return;
-    img.boxes = this.undoStacks[key].pop()!;
+    const entry = this.undoLog.pop();
+    if (!entry) return;
+    const images = this.current.images;
+
+    if (entry.kind === 'image-removed') {
+      const at = Math.min(entry.index, images.length);
+      images.splice(at, 0, entry.img);
+      this.imgIndex = at;
+    } else if (entry.kind === 'boxes-multi') {
+      for (const e of entry.entries) {
+        const img = images.find(i => i.filename === e.filename);
+        if (img) img.boxes = e.boxes;
+      }
+    } else {
+      // 'boxes': restore one image's boxes, looked up by filename so it works
+      // regardless of which image is currently shown. Navigate to it so the
+      // user sees what changed.
+      const i = images.findIndex(im => im.filename === entry.filename);
+      if (i >= 0) {
+        images[i].boxes = entry.boxes;
+        this.imgIndex = i;
+      }
+    }
     this.selectedBox = null;
+    this.selectedBoxes = new Set();
     this.scheduleSave();
   }
 
@@ -549,13 +600,15 @@ class AppState {
 
   removeClass(idx: number) {
     if (!this.current || this.current.classes.length <= 1) return;
-    // Snapshot every image's boxes BEFORE we mutate, so undo can reverse the
-    // class shift across the whole project.
+    // Snapshot every affected image's boxes BEFORE we mutate, as a single
+    // atomic undo entry, so one undo reverses the whole project-wide shift.
+    const entries: { filename: string; boxes: BoxSnapshot }[] = [];
     for (const img of this.current.images) {
       if (img.boxes.some(b => b.classIdx === idx || b.classIdx > idx)) {
-        this.pushUndoFor(img, img.boxes);
+        entries.push({ filename: img.filename, boxes: $state.snapshot(img.boxes) as Box[] });
       }
     }
+    if (entries.length) this.pushEntry({ kind: 'boxes-multi', entries });
     this.current.classes.splice(idx, 1);
     this.current.images.forEach(img => {
       img.boxes.forEach(b => {

@@ -306,9 +306,12 @@
       case 'd': case 'D': e.preventDefault(); app.navigateImage(1); break;
       case 'c': case 'C': e.preventDefault(); app.copyBoxesFromPrevious(); break;
       case 'x': case 'X': e.preventDefault(); app.toggleReviewed(); break;
-      case 'z': case 'Z': e.preventDefault(); app.undo(); break;
       case '?': e.preventDefault(); app.showHelp = !app.showHelp; break;
-      case 'Delete': case 'Backspace': e.preventDefault(); app.deleteSelectedOrLast(); break;
+      case 'Delete':
+        e.preventDefault();
+        if (e.shiftKey) app.removeCurrentImage();
+        else app.deleteSelectedOrLast();
+        break;
       case 'Escape':
         e.preventDefault();
         if (app.showHelp) { app.showHelp = false; }
