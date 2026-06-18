@@ -53,6 +53,7 @@ pub fn run() {
             fs_helpers::scan_image_folder,
             fs_helpers::dir_exists,
             fs_helpers::allow_asset_dir,
+            fs_helpers::allow_fs_dir,
             opener_bridge::open_external_url,
         ])
         .run(tauri::generate_context!())

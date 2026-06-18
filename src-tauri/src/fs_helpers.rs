@@ -12,6 +12,7 @@
 
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
+use tauri_plugin_fs::FsExt;
 
 const IMG_EXT: &[&str] = &["png", "jpg", "jpeg", "bmp", "webp"];
 
@@ -57,6 +58,24 @@ pub async fn allow_asset_dir(app: AppHandle, dir: PathBuf) -> Result<(), String>
     app.asset_protocol_scope()
         .allow_directory(&dir, true)
         .map_err(|e| format!("allow_directory: {e}"))
+}
+
+/// Expand the fs plugin's runtime scope to cover a single directory,
+/// recursively. Needed because the project JSON now lives inside the image
+/// folder (`<dir>/tsia-project.json`) so it travels with the dataset on
+/// backup/move. The static fs scope only covers $APPDATA; image folders are
+/// user-picked and added here at runtime, same discipline as the asset scope.
+///
+/// Returns Err if the path is missing or isn't a directory.
+#[tauri::command]
+pub async fn allow_fs_dir(app: AppHandle, dir: PathBuf) -> Result<(), String> {
+    let meta = tokio::fs::metadata(&dir).await.map_err(|e| format!("stat: {e}"))?;
+    if !meta.is_dir() {
+        return Err("path is not a directory".to_string());
+    }
+    let scope = app.fs_scope();
+    scope.allow_directory(&dir, true).map_err(|e| format!("allow_directory: {e}"))?;
+    Ok(())
 }
 
 fn scan<'a>(

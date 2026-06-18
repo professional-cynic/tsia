@@ -44,7 +44,8 @@ Built with [Tauri 2](https://tauri.app) and [SvelteKit](https://kit.svelte.dev).
   progress bar in the annotate screen reflects this.
 - Per-image **filters** (annotated / unannotated, reviewed / unreviewed /
   requires re-review, by class) so you can focus on what still needs work.
-- **Autosave** with a 1-second debounce. No save button.
+- **Autosave** with a 1-second debounce. No save button. Annotations are
+  written to `tsia-project.json` inside the image folder (see below).
 - **Undo** stack (50 steps).
 - Almost all actions can be performed with a keyboard, without needing a mouse.
 - Automatic light/dark mode.
@@ -87,6 +88,29 @@ deliberately narrow (axis-aligned boxes only) so the rest of the
 design budget went into ergonomics: keyboard shortcuts that match what
 your hands already know, an undo stack, autosave, a per-image review
 state, and COCO and YOLO export that round-trips properly.
+
+## Where your annotations live
+
+Each project is stored as a single file, **`tsia-project.json`, inside the
+image folder itself** (one project per folder). It holds everything: classes,
+box coordinates, review state, and filters. The image files are never modified.
+
+The practical consequence: **backing up, moving, or syncing the image folder
+carries the annotations with it automatically.** Copy the folder to another
+drive or machine, open TSIA there, point it at the folder, and your work is
+intact: there's no separate annotation file to remember. If you move the
+folder while TSIA knows about it, opening the project prompts you to locate
+the new path.
+
+TSIA keeps a small `registry.json` in its app-data directory, but this only
+records *which folders* contain projects so they can be listed on launch: it
+contains no annotations. If you delete it, you can re-add a project by opening
+its folder again.
+
+Projects created in older versions (which stored annotations in app-data) are
+migrated automatically on first launch: the annotations are written into each
+image folder, and the originals are kept as a backup under `projects-backup/`
+in the app-data directory.
 
 ## Install
 

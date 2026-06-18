@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { convertFileSrc } from '@tauri-apps/api/core';
   import { join } from '@tauri-apps/api/path';
+  import { invoke, convertFileSrc } from '@tauri-apps/api/core';
   import { app } from '$lib/stores/app.svelte';
   import { renderCanvas } from '$lib/canvas/render';
   import { clientToImage, clampToImage, clampBox, hitTestBox, hitTestHandle, applyHandleDrag } from '$lib/canvas/geometry';

@@ -11,7 +11,7 @@
   import { exportDataset, cancelExport, pickExportFolder, type Format, type LinkMode } from '$lib/io/export';
 
   let renameTarget = $state<Project | null>(null);
-  let deleteTarget = $state<string | null>(null);
+  let deleteTarget = $state<Project | null>(null);
   let splitRatio = $state(80);
   let linkMode = $state<LinkMode>('copy');
   let reviewedOnly = $state(false);
@@ -143,7 +143,7 @@
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      if (exportState.kind !== 'error') exportState = { kind: 'error', message };
+      exportState = { kind: 'error', message };
     }
   }
 
@@ -289,7 +289,7 @@
             <button class="btn-sm btn-primary" onclick={() => openProject(p)}>Open</button>
             <button class="btn-sm" onclick={() => exportState = { kind: 'configuring', project: p }}>Export</button>
             <button class="btn-sm" onclick={() => renameTarget = p}>Rename</button>
-            <button class="btn-sm btn-danger" onclick={() => deleteTarget = p.id}>Delete</button>
+            <button class="btn-sm btn-danger" onclick={() => deleteTarget = p}>Delete</button>
           </div>
         </div>
       {/each}
