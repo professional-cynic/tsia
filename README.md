@@ -40,6 +40,10 @@ Built with [Tauri 2](https://tauri.app) and [SvelteKit](https://kit.svelte.dev).
 - Optional **hardlink mode** on export: produces a dataset folder where
   each image is a hardlink rather than a copy, saving disk space on large
   datasets.
+- **Merge projects**: combine two or more projects into a new folder (the
+  originals are untouched). Images are copied under source-prefixed names; an
+  interactive table reconciles class names across projects, so inconsistent
+  labels like "Lump" and "lumps" can be unified into one class.
 - Mark images as **reviewed** to track progress through a dataset. The
   progress bar in the annotate screen reflects this.
 - Per-image **filters** (annotated / unannotated, reviewed / unreviewed /
@@ -68,7 +72,7 @@ A full reference is in the app (press `?`). The essentials:
 - Arrows: nudge the selection by 1 px (hold Shift for 10 px)
 - `X`: toggle "requires re-review"
 - `Del`: delete selected box(es)
-- `Shift+Del`: remove the current image from the project (file on disk is kept; undoable)
+- `Shift+D`: remove the current image from the project (file on disk is kept; undoable)
 - `Ctrl/Cmd+Z`: undo
 - Scroll to zoom, middle-drag to pan, `Esc` to deselect, `F11` for fullscreen
 

@@ -4,6 +4,7 @@
   import ProjectsScreen from './ProjectsScreen.svelte';
   import NewProjectScreen from './NewProjectScreen.svelte';
   import AnnotateScreen from './AnnotateScreen.svelte';
+  import MergeScreen from './MergeScreen.svelte';
   import UpdateBanner from './UpdateBanner.svelte';
   import { app } from '$lib/stores/app.svelte';
   import { loadAllProjects } from '$lib/persistence';
@@ -36,6 +37,8 @@
       <NewProjectScreen />
     {:else if app.screen === 'annotate'}
       <AnnotateScreen />
+    {:else if app.screen === 'merge'}
+      <MergeScreen />
     {/if}
   </div>
 </div>

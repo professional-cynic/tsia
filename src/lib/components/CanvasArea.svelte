@@ -303,14 +303,18 @@
 
     switch (e.key) {
       case 'a': case 'A': e.preventDefault(); app.navigateImage(-1); break;
-      case 'd': case 'D': e.preventDefault(); app.navigateImage(1); break;
+      case 'd': case 'D':
+        e.preventDefault();
+        // Shift+D removes the current image (one-handed); plain D goes next.
+        if (e.shiftKey) app.removeCurrentImage();
+        else app.navigateImage(1);
+        break;
       case 'c': case 'C': e.preventDefault(); app.copyBoxesFromPrevious(); break;
       case 'x': case 'X': e.preventDefault(); app.toggleReviewed(); break;
       case '?': e.preventDefault(); app.showHelp = !app.showHelp; break;
       case 'Delete':
         e.preventDefault();
-        if (e.shiftKey) app.removeCurrentImage();
-        else app.deleteSelectedOrLast();
+        app.deleteSelectedOrLast();
         break;
       case 'Escape':
         e.preventDefault();

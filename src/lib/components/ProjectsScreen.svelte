@@ -271,6 +271,9 @@
     <span class="topbar-title">Projects</span>
     <span style="flex:1"></span>
     <button class="btn-primary" onclick={() => app.screen = 'new'}>+ New Project</button>
+    {#if app.projects.length >= 2}
+      <button onclick={() => app.screen = 'merge'}>Merge</button>
+    {/if}
     <button onclick={() => app.screen = 'home'}>Home</button>
   </div>
   <div class="list">

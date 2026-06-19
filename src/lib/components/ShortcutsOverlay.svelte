@@ -30,7 +30,7 @@
         { keys: ['Arrows'], desc: 'Nudge selection 1 px (whole group if multi)' },
         { keys: ['Shift', 'Arrows'], sep: '+', desc: 'Nudge selection by 10 px' },
         { keys: ['Del'], desc: 'Delete selected box(es)' },
-        { keys: ['Shift', 'Del'], sep: '+', desc: 'Remove current image from project (undoable)' },
+        { keys: ['Shift', 'D'], sep: '+', desc: 'Remove current image from project (undoable)' },
         { keys: ['X'], desc: 'Toggle needs re-review' },
         { keys: ['Ctrl', 'Z'], sep: '+', desc: 'Undo (chronological)' },
       ],

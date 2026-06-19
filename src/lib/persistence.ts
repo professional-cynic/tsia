@@ -76,6 +76,18 @@ async function registerFolder(dir: string): Promise<void> {
   }
 }
 
+/// Register a folder that already contains a tsia-project.json (e.g. one just
+/// created by the merge command). Grants fs scope and adds it to the registry
+/// so the next loadAllProjects() picks it up. Safe to call repeatedly.
+export async function registerProjectFolder(dir: string): Promise<void> {
+  if (!isSafeAbsoluteDir(dir)) {
+    console.warn(`Refusing to register unsafe path: ${dir}`);
+    return;
+  }
+  await allowFolder(dir);
+  await registerFolder(dir);
+}
+
 async function unregisterFolder(dir: string): Promise<void> {
   const folders = await readRegistry();
   await writeRegistry(folders.filter(f => f !== dir));

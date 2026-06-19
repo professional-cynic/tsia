@@ -30,7 +30,7 @@ export interface Project {
   filterClass?: string;
 }
 
-export type Screen = 'home' | 'projects' | 'new' | 'annotate';
+export type Screen = 'home' | 'projects' | 'new' | 'annotate' | 'merge';
 
 export type AnnotationFilter = 'all' | 'annotated' | 'unannotated';
 export type ReviewFilter = 'all' | 'reviewed' | 'unreviewed' | 'rereview';

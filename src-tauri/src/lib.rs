@@ -5,6 +5,7 @@
 mod export;
 mod fs_helpers;
 mod import;
+mod merge;
 mod opener_bridge;
 mod util;
 
@@ -37,6 +38,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             app.manage(export::ExportCancel::default());
+            app.manage(merge::MergeCancel::default());
             // Pre-create $APPDATA/projects so the frontend's fs scope can be
             // restricted to that subdir only (it can't mkdir its own parent).
             if let Ok(app_data) = app.path().app_data_dir() {
@@ -50,6 +52,8 @@ pub fn run() {
             export::export_cancel,
             import::import_coco,
             import::import_yolo,
+            merge::merge_projects,
+            merge::merge_cancel,
             fs_helpers::scan_image_folder,
             fs_helpers::dir_exists,
             fs_helpers::allow_asset_dir,
