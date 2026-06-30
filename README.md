@@ -108,8 +108,16 @@ the new path.
 
 TSIA keeps a small `registry.json` in its app-data directory, but this only
 records *which folders* contain projects so they can be listed on launch: it
-contains no annotations. If you delete it, you can re-add a project by opening
-its folder again.
+contains no annotations. If it's lost (a reinstall, or a new machine), your
+projects aren't gone: use **Open Folder…** on the Projects screen and pick an
+image folder; TSIA reads the `tsia-project.json` inside it and restores the
+project to the list.
+
+**Deleting a project** removes its `tsia-project.json` from the image folder,
+which permanently destroys that project's annotations (classes, boxes, review
+state). It does **not** delete the image files; those are left untouched.
+Because the project file itself is removed, a deleted project cannot be
+recovered with Open Folder; only the images remain.
 
 Projects created in older versions (which stored annotations in app-data) are
 migrated automatically on first launch: the annotations are written into each

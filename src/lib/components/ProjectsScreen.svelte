@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app } from '$lib/stores/app.svelte';
-  import { deleteProjectFile, loadAllProjects, saveProject } from '$lib/persistence';
+  import { deleteProjectFile, loadAllProjects, saveProject, openExistingProjectFolder } from '$lib/persistence';
   import { open } from '@tauri-apps/plugin-dialog';
   import { invoke } from '@tauri-apps/api/core';
   import type { Project } from '$lib/types';
@@ -250,6 +250,24 @@
     app.screen = 'annotate';
   }
 
+  let openMessage = $state<string | null>(null);
+
+  async function openExisting() {
+    openMessage = null;
+    const dir = await open({ title: 'Open existing project folder', directory: true });
+    if (!dir) return;
+    const result = await openExistingProjectFolder(dir as string);
+    if (result.ok) {
+      app.projects = await loadAllProjects();
+    } else if (result.reason === 'no-project') {
+      openMessage = "That folder doesn't contain a TSIA project (no tsia-project.json found in it).";
+    } else if (result.reason === 'invalid') {
+      openMessage = 'That folder has a project file, but it could not be read. It may be corrupted.';
+    } else {
+      openMessage = 'That folder path could not be used.';
+    }
+  }
+
   async function doDelete() {
     if (!deleteTarget) return;
     await deleteProjectFile(deleteTarget);
@@ -276,7 +294,7 @@
     {/if}
     <button onclick={() => app.screen = 'home'}>Home</button>
   </div>
-  <div class="list">
+  <div class="list" class:list-empty={app.projects.length === 0}>
     {#if app.projects.length === 0}
       <div class="empty">No projects yet. Create one to get started.</div>
     {:else}
@@ -297,6 +315,16 @@
         </div>
       {/each}
     {/if}
+
+    <div class="open-existing">
+      <button class="btn-open-existing" onclick={openExisting}>Open Existing Project</button>
+      <span class="info" tabindex="0" role="img" aria-label="What is this?">i
+        <span class="tip">Each project is stored as a <code>tsia-project.json</code> inside its image folder. If a project isn't listed (after a reinstall, or on another machine), use this to pick its folder and restore it.</span>
+      </span>
+    </div>
+    {#if openMessage}
+      <div class="open-msg">{openMessage}</div>
+    {/if}
   </div>
 </div>
 
@@ -305,7 +333,7 @@
 {/if}
 
 {#if deleteTarget}
-  <ConfirmModal title="Delete project" message="Delete this project and all its annotations?" onconfirm={doDelete} oncancel={() => deleteTarget = null} />
+  <ConfirmModal title="Delete project" message="Permanently delete this project's annotations? The tsia-project.json file will be removed from the image folder. Your image files are NOT deleted, only the annotations. This cannot be undone." onconfirm={doDelete} oncancel={() => deleteTarget = null} />
 {/if}
 
 {#if relocateTarget}
@@ -413,7 +441,7 @@
   <div class="export-backdrop" role="presentation">
     <div class="export-modal" role="dialog" aria-modal="true" aria-labelledby="export-done-title" tabindex="-1">
       <div id="export-done-title" class="export-title">
-        Export complete{exportState.warnings.length > 0 ? ` — ${exportState.warnings.length} warning${exportState.warnings.length === 1 ? '' : 's'}` : ''}
+        Export complete{exportState.warnings.length > 0 ? `: ${exportState.warnings.length} warning${exportState.warnings.length === 1 ? '' : 's'}` : ''}
       </div>
       {#if exportState.outPath}
         <div class="export-row">
@@ -442,8 +470,43 @@
   .screen-projects { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
   .topbar { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
   .topbar-title { font-size: 14px; font-weight: 700; letter-spacing: 0.05em; }
-  .list { flex: 1; overflow-y: auto; max-width: 860px; margin: 0 auto; padding: 24px; width: 100%; }
-  .empty { color: var(--text2); text-align: center; padding: 40px; }
+  .list { flex: 1; overflow-y: auto; max-width: 860px; margin: 0 auto; padding: 24px; width: 100%; display: flex; flex-direction: column; }
+  .empty { color: var(--text2); text-align: center; padding: 0 0 20px; }
+
+  /* When there are no projects, center the open-existing block (and the empty
+     note) vertically in the list area instead of sitting at the top. */
+  .list-empty { justify-content: center; align-items: center; }
+
+  .open-existing {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 16px 0;
+  }
+  .btn-open-existing {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); padding: 9px 18px; font-size: 13px; cursor: pointer;
+  }
+  .btn-open-existing:hover { background: var(--bg2); border-color: var(--text2); }
+
+  .info {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 1px solid var(--text2); color: var(--text2);
+    font-size: 10px; font-style: italic; font-weight: 700;
+    cursor: help; position: relative; user-select: none;
+  }
+  .info .tip {
+    position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    width: 280px; padding: 10px 12px;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text2); font-size: 11px; font-style: normal; font-weight: 400;
+    line-height: 1.5; text-align: left;
+    opacity: 0; visibility: hidden; transition: opacity 0.12s; z-index: 10;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+  }
+  .info:hover .tip, .info:focus .tip { opacity: 1; visibility: visible; }
+  .info .tip code { font-size: 10px; color: var(--text); }
+
+  .open-msg { font-size: 12px; color: var(--warn); text-align: center; padding-bottom: 12px; }
   .project-item { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; background: var(--bg2); }
   .project-info { flex: 1; }
   .project-name { font-weight: 600; margin-bottom: 4px; }

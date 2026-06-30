@@ -88,6 +88,33 @@ export async function registerProjectFolder(dir: string): Promise<void> {
   await registerFolder(dir);
 }
 
+export type OpenFolderResult =
+  | { ok: true }
+  | { ok: false; reason: 'unsafe' | 'no-project' | 'invalid' };
+
+/// Open an existing project folder the user picked from a dialog: verify it
+/// actually contains a readable, valid tsia-project.json, then register it so
+/// it appears in the list. Used for recovery — e.g. after a reinstall or on a
+/// new machine, when the image folders survive but the registry doesn't.
+/// Returns a typed result so the UI can explain a failure rather than silently
+/// registering a folder that isn't a TSIA project.
+export async function openExistingProjectFolder(dir: string): Promise<OpenFolderResult> {
+  if (!isSafeAbsoluteDir(dir)) return { ok: false, reason: 'unsafe' };
+  await allowFolder(dir);
+  const path = await projectFilePath(dir);
+  const present = await exists(path).catch(() => false);
+  if (!present) return { ok: false, reason: 'no-project' };
+  try {
+    const text = await readTextFile(path);
+    const project = parseProject(JSON.parse(text));
+    if (!project) return { ok: false, reason: 'invalid' };
+  } catch {
+    return { ok: false, reason: 'invalid' };
+  }
+  await registerFolder(dir);
+  return { ok: true };
+}
+
 async function unregisterFolder(dir: string): Promise<void> {
   const folders = await readRegistry();
   await writeRegistry(folders.filter(f => f !== dir));
