@@ -65,7 +65,7 @@
     | { kind: 'idle' }
     | { kind: 'configuring'; project: Project }
     | { kind: 'running'; format: Format; current: number; total: number;
-        currentFile: string; outPath: string; cancelled: boolean;
+        outPath: string; cancelled: boolean;
         warnings: { filename: string; message: string }[] }
     | { kind: 'done'; outPath: string;
         warnings: { filename: string; message: string }[] }
@@ -97,7 +97,7 @@
     exportState = {
       kind: 'running',
       format, current: 0, total,
-      currentFile: '', outPath: '',
+      outPath: '',
       cancelled: false, warnings: [],
     };
 
@@ -115,7 +115,6 @@
               break;
             case 'item':
               exportState.current = e.data.current;
-              exportState.currentFile = e.data.filename;
               break;
             case 'warning':
               exportState.warnings.push(e.data);
@@ -419,9 +418,6 @@
         <div class="export-progress-fill" style:width="{exportState.total > 0 ? (exportState.current / exportState.total * 100) : 0}%"></div>
       </div>
       <div class="export-progress-text">{exportState.current} / {exportState.total} images</div>
-      {#if exportState.currentFile}
-        <div class="export-current-file">{exportState.currentFile}</div>
-      {/if}
       <div class="export-actions" style="margin-top:12px; justify-content:center;">
         <button class="btn-sm btn-danger" disabled={exportState.cancelled} onclick={() => cancelExport()}>Cancel</button>
       </div>
@@ -540,6 +536,5 @@
   .export-warnings { font-size: 11px; max-height: 240px; overflow-y: auto; background: var(--bg3); border-radius: 4px; padding: 8px; }
   .warning-row { padding: 2px 0; color: var(--text2); word-break: break-word; }
   .warning-file { font-family: var(--font-mono, monospace); color: var(--warn); }
-  .export-current-file { font-size: 10px; color: var(--text2); text-align: center; margin-top: 4px; font-family: var(--font-mono, monospace); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .export-path { font-family: var(--font-mono, monospace); font-size: 11px; word-break: break-all; background: var(--bg3); padding: 6px 8px; border-radius: 4px; color: var(--text); }
 </style>
