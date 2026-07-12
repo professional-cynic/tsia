@@ -2,7 +2,8 @@
 // All state lives on a single exported class instance so components can mutate
 // properties without hitting Svelte's "cannot assign to import" restriction.
 
-import type { Project, Screen, ImageEntry, Box, AnnotationFilter, ReviewFilter } from '$lib/types';
+import type { Project, Screen, ImageEntry, Box, Measurement, AnnotationFilter, ReviewFilter } from '$lib/types';
+import { measureLengthMm } from '$lib/types';
 import { MAX_CLASSES, MAX_UNDO, AUTOSAVE_DELAY } from '$lib/constants';
 import { saveProject } from '$lib/persistence';
 
@@ -50,6 +51,18 @@ class AppState {
     undoSnapshot: BoxSnapshot;
   } | null>(null);
   showHelp = $state(false);
+
+  // ── Measurement mode ─────────────────────────────────────
+  // Toggled with `m`; STAYS ON until toggled off. While on, dragging draws a
+  // width line. With a box selected, the line is stored on that box (one per
+  // box, replacing any previous). With no box selected, the line is transient:
+  // shown for reference, never persisted.
+  measureMode = $state(false);
+  /// In-progress drag while drawing a measurement (image pixel coords).
+  measureDraw = $state<{ ax: number; ay: number; bx: number; by: number } | null>(null);
+  /// The last unattached ("scratch") measurement. Purely visual; cleared on
+  /// image change and never written to the project.
+  scratchMeasure = $state<Measurement | null>(null);
 
   // Unified chronological undo log. A single ordered stack of actions so undo
   // always reverses the most recent operation, whatever its kind (box edit on
@@ -158,6 +171,9 @@ class AppState {
     this.drawing = null;
     this.drag = null;
     this.undoLog = [];
+    this.measureMode = false;
+    this.measureDraw = null;
+    this.scratchMeasure = null;
     // Restore per-project filter state if present.
     this.filterAnnotation = project.filterAnnotation ?? 'all';
     this.filterReview = project.filterReview ?? 'all';
@@ -267,6 +283,9 @@ class AppState {
     this.selectedBoxes = new Set();
     this.drawing = null;
     this.drag = null;
+    // The scratch line is per-image scratch: it doesn't follow you.
+    this.scratchMeasure = null;
+    this.measureDraw = null;
     // Auto-mark as reviewed only on first view (previously undefined).
     // Images explicitly flagged for re-review (reviewed === false) stay
     // flagged when clicked — the user is going through the rereview
@@ -313,6 +332,75 @@ class AppState {
     const nextPos = pos + delta;
     if (nextPos < 0 || nextPos >= filtered.length) return; // at an end; stay put
     this.setImageIndex(filtered[nextPos].i, false);
+  }
+
+  // ── Measurement mode ─────────────────────────────────────
+
+  /// Toggle measure mode. It persists until toggled off. Leaving the mode
+  /// discards any in-progress drag and the transient scratch line.
+  toggleMeasureMode() {
+    this.measureMode = !this.measureMode;
+    this.measureDraw = null;
+    if (!this.measureMode) this.scratchMeasure = null;
+    // A half-drawn box shouldn't survive a mode switch either.
+    this.drawing = null;
+    this.drag = null;
+  }
+
+  /// Commit the just-drawn segment. `ownerBoxId` is the box the line starts on
+  /// (hit-tested by the caller, which has the geometry): the measurement is
+  /// stored on THAT box and it's auto-selected, so drawing across a different
+  /// box moves the measurement there rather than silently attaching to whatever
+  /// happened to be selected. A null owner (line started on empty space) makes
+  /// it the transient scratch line: visible, never saved.
+  commitMeasurement(m: Measurement, ownerBoxId: number | null) {
+    if (!this.current) return;
+    // Reject a degenerate (zero-length) segment: it carries no information.
+    if (m.ax === m.bx && m.ay === m.by) { this.measureDraw = null; return; }
+
+    if (ownerBoxId === null) {
+      this.scratchMeasure = m;
+      this.measureDraw = null;
+      return;
+    }
+    const img = this.current.images[this.imgIndex];
+    const box = img.boxes.find(b => b.id === ownerBoxId);
+    if (!box) { this.measureDraw = null; return; }
+    this.pushUndo();
+    box.measure = m;
+    this.selectSingle(ownerBoxId);
+    this.measureDraw = null;
+    this.scheduleSave();
+  }
+
+  /// Remove the selected box's measurement (the box itself is kept).
+  clearMeasurement(boxId: number) {
+    if (!this.current) return;
+    const img = this.current.images[this.imgIndex];
+    const box = img.boxes.find(b => b.id === boxId);
+    if (!box || !box.measure) return;
+    this.pushUndo();
+    delete box.measure;
+    this.scheduleSave();
+  }
+
+  /// Physical length of a box's measurement, or null when unmeasured or when
+  /// the project has no pixel pitch set.
+  measurementMm(box: Box): number | null {
+    if (!box.measure) return null;
+    return measureLengthMm(box.measure, this.current?.pixelPitch);
+  }
+
+  /// Set the project's pixel pitch (mm per pixel). All measurements are
+  /// derived from it, so this retroactively corrects every stored measurement.
+  setPixelPitch(pitch: number | undefined) {
+    if (!this.current) return;
+    if (typeof pitch === 'number' && Number.isFinite(pitch) && pitch > 0) {
+      this.current.pixelPitch = pitch;
+    } else {
+      delete this.current.pixelPitch;
+    }
+    this.scheduleSave();
   }
 
   deleteBox(id: number) {

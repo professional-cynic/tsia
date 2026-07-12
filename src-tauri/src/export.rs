@@ -24,6 +24,11 @@ pub struct ExportBox {
     pub y: f64,
     pub w: f64,
     pub h: f64,
+    /// Measured physical width in millimetres, computed frontend-side from the
+    /// project's pixel pitch. None when the box is unmeasured or no pitch is
+    /// set. Exported as a non-breaking sidecar (see write_coco / write_yolo).
+    #[serde(default)]
+    pub measurement_mm: Option<f64>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -365,7 +370,7 @@ async fn write_coco(
             "date_captured": serde_json::Value::Null,
         }));
         for b in &rec.img.boxes {
-            annotations.push(serde_json::json!({
+            let mut ann = serde_json::json!({
                 "id": ann_id,
                 "image_id": image_id,
                 "category_id": b.class_idx + 1,
@@ -373,7 +378,15 @@ async fn write_coco(
                 "area": round1(b.w * b.h),
                 "segmentation": [],
                 "iscrowd": 0,
-            }));
+            });
+            // Custom, additive key. COCO has no field for a physical width, and
+            // overloading `area` (which is pixel area of the instance) would be
+            // wrong and would break standard tooling. Unknown keys are ignored
+            // by COCO readers, so adding one keeps the file valid.
+            if let Some(mm) = b.measurement_mm {
+                ann["measurement_mm"] = serde_json::json!(round3(mm));
+            }
+            annotations.push(ann);
             ann_id += 1;
         }
     }
@@ -470,6 +483,44 @@ async fn write_yolo(
         joined.map_err(|e| format!("label task panic: {e}"))?
               .map_err(io_err("write label"))?;
     }
+
+    // ── Measurements sidecar ──
+    // YOLO label files have a fixed 5-field format; adding a sixth field or an
+    // extra line would make them unparseable by standard loaders. So physical
+    // measurements go in a separate file that YOLO never reads.
+    //
+    // Keyed by label stem (matching the .txt name). `measurements_mm` is
+    // positionally aligned with the lines of that .txt: entry N is the
+    // measurement for the box on line N, null when that box is unmeasured.
+    let mut measured: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+    for rec in records {
+        if rec.img.boxes.is_empty() { continue; }
+        if !rec.img.boxes.iter().any(|b| b.measurement_mm.is_some()) { continue; }
+        let split = if rec.idx < split_idx { "train" } else { "val" };
+        let values: Vec<serde_json::Value> = rec.img.boxes.iter()
+            .map(|b| match b.measurement_mm {
+                Some(mm) => serde_json::json!(round3(mm)),
+                None => serde_json::Value::Null,
+            })
+            .collect();
+        measured.insert(strip_ext(&rec.img.filename).to_string(), serde_json::json!({
+            "split": split,
+            "image": rec.img.filename,
+            "measurements_mm": values,
+        }));
+    }
+    if !measured.is_empty() {
+        let doc = serde_json::json!({
+            "description": "Physical width measurements, in millimetres, one entry per box. \
+Positionally aligned with the lines of the matching labels/<split>/<stem>.txt file. \
+Null means that box was not measured. Not read by YOLO; this file is additive.",
+            "unit": "mm",
+            "images": measured,
+        });
+        let body = serde_json::to_vec_pretty(&doc).map_err(|e| e.to_string())?;
+        tokio::fs::write(wrapper.join("measurements.json"), body).await
+            .map_err(io_err("write measurements.json"))?;
+    }
     Ok(())
 }
 
@@ -501,7 +552,8 @@ images/val/           # validation images\n\
 labels/train/         # one .txt per annotated image: <class_idx> <cx> <cy> <w> <h> (normalised); negatives have none\n\
 labels/val/\n\
 data.yaml             # Ultralytics dataset descriptor\n\
-classes.txt           # class names, one per line\n",
+classes.txt           # class names, one per line\n\
+measurements.json     # physical widths in mm, aligned with each .txt (only if measured); ignored by YOLO\n",
     };
     let readme = format!("\
 # {project}
@@ -536,6 +588,11 @@ Exported from Toni's Simple Image Annotator on {date}.
 // ── Helpers ──────────────────────────────────────────────
 
 fn round1(n: f64) -> f64 { (n * 10.0).round() / 10.0 }
+
+/// Millimetre measurements need finer resolution than pixel coordinates:
+/// defect widths are often well under a millimetre, so 0.1mm steps would
+/// destroy the value. 3dp gives micron resolution.
+fn round3(n: f64) -> f64 { (n * 1000.0).round() / 1000.0 }
 
 /// Deterministic shuffle for the train/val split. We shuffle so that the
 /// split isn't biased by file order (sequential frames, date-sorted names,

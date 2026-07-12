@@ -35,6 +35,10 @@
       drawing: app.drawing, classes: app.current.classes,
       dragOverride: dragPreview,
       groupOffset: groupPreview,
+      measureMode: app.measureMode,
+      measureDraw: app.measureDraw,
+      scratchMeasure: app.scratchMeasure,
+      pixelPitch: app.current.pixelPitch,
     });
   }
 
@@ -96,9 +100,11 @@
     // mutations are handled either by dragPreview (during drag) or
     // by add/remove which changes the array length.
     const boxes = app.current?.images[app.imgIndex]?.boxes;
-    if (boxes) for (const b of boxes) { b.classIdx; }
+    if (boxes) for (const b of boxes) { b.classIdx; b.measure; }
     dragPreview;
     groupPreview;
+    app.measureMode; app.measureDraw; app.scratchMeasure;
+    app.current?.pixelPitch;
     scheduleRender();
   });
 
@@ -120,6 +126,15 @@
     e.preventDefault();
     const img = app.current.images[app.imgIndex];
     const [ix, iy] = clientToImage(e.clientX, e.clientY, canvasEl, app.offsetX, app.offsetY, app.zoom);
+
+    // Measure mode takes over the pointer entirely: no box drawing, moving or
+    // resizing. A drag draws a width line; a click (no movement) selects the
+    // box under the cursor so the next drag can attach to it.
+    if (app.measureMode) {
+      const [cx, cy] = clampToImage(ix, iy, loadedImage.naturalWidth, loadedImage.naturalHeight);
+      app.measureDraw = { ax: cx, ay: cy, bx: cx, by: cy };
+      return;
+    }
 
     if (app.selectedBox !== null && !e.shiftKey) {
       const selBox = img.boxes.find(b => b.id === app.selectedBox);
@@ -164,10 +179,17 @@
 
   function handleMouseMove(e: MouseEvent) {
     if (panStart) { app.offsetX = panStart.ox + (e.clientX - panStart.x); app.offsetY = panStart.oy + (e.clientY - panStart.y); return; }
-    if (!app.drag && !app.drawing && !groupDrag) return;
+    if (!app.drag && !app.drawing && !groupDrag && !app.measureDraw) return;
     if (!loadedImage || !app.current) return;
     const [ix, iy] = clientToImage(e.clientX, e.clientY, canvasEl, app.offsetX, app.offsetY, app.zoom);
     const imgW = loadedImage.naturalWidth, imgH = loadedImage.naturalHeight;
+
+    // Measure drag: move the free endpoint. The line is not axis-aligned.
+    if (app.measureDraw) {
+      const [cx, cy] = clampToImage(ix, iy, imgW, imgH);
+      app.measureDraw = { ...app.measureDraw, bx: cx, by: cy };
+      return;
+    }
 
     if (groupDrag) {
       let dx = ix - groupDrag.startImgX;
@@ -201,6 +223,44 @@
   function handleMouseUp(_e: MouseEvent) {
     if (panStart) { panStart = null; return; }
     if (!loadedImage || !app.current) return;
+
+    // Measure mode: a zero-length drag is a click (select the box under it);
+    // a real drag commits a measurement to a box (auto-selecting it), or a
+    // scratch line if it doesn't relate to any box.
+    if (app.measureDraw) {
+      const m = app.measureDraw;
+      const img = app.current.images[app.imgIndex];
+
+      // Ownership rule, in priority order:
+      //  1. If the line starts inside the ALREADY-SELECTED box, keep it there.
+      //     An explicit selection must win over overlap ambiguity (a small box
+      //     nested in a big one: selecting the small one and drawing inside it
+      //     should stay on the small one, not jump to the enclosing box).
+      //  2. Otherwise the topmost box under the start point owns it.
+      //  3. Otherwise it's a scratch line.
+      let owner: number | null = null;
+      const sel = app.selectedBox !== null
+        ? img.boxes.find(b => b.id === app.selectedBox) : undefined;
+      if (sel && hitTestBox(m.ax, m.ay, sel)) {
+        owner = sel.id;
+      } else {
+        for (let i = img.boxes.length - 1; i >= 0; i--) {
+          if (hitTestBox(m.ax, m.ay, img.boxes[i])) { owner = img.boxes[i].id; break; }
+        }
+      }
+
+      const moved = Math.hypot(m.bx - m.ax, m.by - m.ay);
+      // A couple of image pixels of slop, so a slightly shaky click still
+      // counts as a click rather than a degenerate measurement.
+      if (moved < 2) {
+        app.measureDraw = null;
+        if (owner !== null) app.selectSingle(owner);
+        else app.clearSelection();
+        return;
+      }
+      app.commitMeasurement({ ax: m.ax, ay: m.ay, bx: m.bx, by: m.by }, owner);
+      return;
+    }
 
     if (groupDrag) {
       const img = app.current.images[app.imgIndex];
@@ -311,15 +371,24 @@
         break;
       case 'c': case 'C': e.preventDefault(); app.copyBoxesFromPrevious(); break;
       case 'x': case 'X': e.preventDefault(); app.toggleReviewed(); break;
+      case 'm': case 'M': e.preventDefault(); app.toggleMeasureMode(); break;
       case '?': e.preventDefault(); app.showHelp = !app.showHelp; break;
       case 'Delete':
         e.preventDefault();
-        app.deleteSelectedOrLast();
+        // In measure mode Delete removes the selected box's measurement, not
+        // the box: deleting annotations from a measuring workflow would be a
+        // nasty surprise.
+        if (app.measureMode) {
+          if (app.selectedBox !== null) app.clearMeasurement(app.selectedBox);
+          else app.scratchMeasure = null;
+        } else {
+          app.deleteSelectedOrLast();
+        }
         break;
       case 'Escape':
         e.preventDefault();
         if (app.showHelp) { app.showHelp = false; }
-        else { app.clearSelection(); app.drawing = null; }
+        else { app.clearSelection(); app.drawing = null; app.measureDraw = null; }
         break;
     }
   }

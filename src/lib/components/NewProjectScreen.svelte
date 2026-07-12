@@ -10,6 +10,7 @@
   let name = $state('');
   let classes = $state<string[]>(['defect']);
   let imageDirPath = $state('');
+  let pixelPitch = $state('');
   let imageFiles = $state<string[]>([]);
   let importedAnnotations = $state<Record<string, ImportedAnnotation[]>>({});
   let importStatus = $state('');
@@ -96,6 +97,9 @@
           })),
         })),
       };
+      // Optional: only set when the user entered a valid positive number.
+      const pitch = parseFloat(pixelPitch);
+      if (Number.isFinite(pitch) && pitch > 0) project.pixelPitch = pitch;
       project.nextBoxId = project.images.reduce(
         (max, img) => Math.max(max, ...img.boxes.map(b => b.id), 0), 0
       ) + 1;
@@ -148,6 +152,14 @@
       {#if imageFiles.length > 0}<div class="status">{imageFiles.length} image(s) found.</div>{/if}
       {#if folderStatus}<div class="field-error">{folderStatus}</div>{/if}
       {#if folderError && !folderStatus}<div class="field-error">Select an image folder.</div>{/if}
+    </div>
+    <div class="card">
+      <div class="card-title">Pixel Pitch (optional)</div>
+      <input type="text" inputmode="decimal" bind:value={pixelPitch} placeholder="e.g. 0.05" />
+      <div class="hint">
+        Millimetres per pixel. Used to convert measured widths to mm. You can set
+        or correct this later: all measurements are recalculated from it.
+      </div>
     </div>
     <div class="card">
       <div class="card-title">Import Annotations (optional)</div>

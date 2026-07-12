@@ -1,6 +1,7 @@
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { Project } from '$lib/types';
+import { measureLengthMm } from '$lib/types';
 
 export type Format = 'coco' | 'yolo';
 export type LinkMode = 'copy' | 'link';
@@ -46,6 +47,11 @@ export async function exportDataset(project: Project, opts: ExportOptions): Prom
         filename: img.filename,
         boxes: img.boxes.map(b => ({
           classIdx: b.classIdx, x: b.x, y: b.y, w: b.w, h: b.h,
+          // Physical width in millimetres, derived from the project's pixel
+          // pitch. Null when the box is unmeasured or no pitch is set: a raw
+          // pixel length has no physical meaning to a consumer, so we omit it
+          // rather than export a unitless number.
+          measurementMm: b.measure ? measureLengthMm(b.measure, project.pixelPitch) : null,
         })),
       })),
     },
