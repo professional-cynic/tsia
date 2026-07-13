@@ -62,5 +62,5 @@ export function measureLengthMm(m: Measurement, pixelPitch: number | undefined):
   return measureLengthPx(m) * pixelPitch;
 }
 
-export type AnnotationFilter = 'all' | 'annotated' | 'unannotated';
+export type AnnotationFilter = 'all' | 'annotated' | 'unannotated' | 'measured' | 'unmeasured';
 export type ReviewFilter = 'all' | 'reviewed' | 'unreviewed' | 'rereview';

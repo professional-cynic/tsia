@@ -4,7 +4,7 @@ import {
 } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
 import { join } from '@tauri-apps/api/path';
-import type { Project, ImageEntry, Box, AnnotationFilter, ReviewFilter } from '$lib/types';
+import type { Project, ImageEntry, Box, Measurement, AnnotationFilter, ReviewFilter } from '$lib/types';
 
 // The project file now lives INSIDE the image folder, so it travels with the
 // dataset when you back up, move, or sync that folder. One project per folder.
@@ -129,12 +129,25 @@ function isStr(v: unknown): v is string { return typeof v === 'string'; }
 function isNum(v: unknown): v is number { return typeof v === 'number' && Number.isFinite(v); }
 function isBool(v: unknown): v is boolean { return typeof v === 'boolean'; }
 
+function parseMeasurement(v: unknown): Measurement | null {
+  if (!isObject(v)) return null;
+  const { ax, ay, bx, by } = v;
+  if (!isNum(ax) || !isNum(ay) || !isNum(bx) || !isNum(by)) return null;
+  // A zero-length segment carries no information; treat it as absent.
+  if (ax === bx && ay === by) return null;
+  return { ax, ay, bx, by };
+}
+
 function parseBox(v: unknown): Box | null {
   if (!isObject(v)) return null;
-  const { id, classIdx, x, y, w, h } = v;
+  const { id, classIdx, x, y, w, h, measure } = v;
   if (!isNum(id) || !isNum(classIdx) || !isNum(x) || !isNum(y) || !isNum(w) || !isNum(h)) return null;
   if (classIdx < 0 || w < 0 || h < 0) return null;
-  return { id, classIdx, x, y, w, h };
+  const box: Box = { id, classIdx, x, y, w, h };
+  // A malformed measurement drops the measurement, not the box.
+  const m = parseMeasurement(measure);
+  if (m) box.measure = m;
+  return box;
 }
 
 function parseImage(v: unknown): ImageEntry | null {
@@ -155,13 +168,13 @@ function parseImage(v: unknown): ImageEntry | null {
   return out;
 }
 
-const ANN_FILTERS: AnnotationFilter[] = ['all', 'annotated', 'unannotated'];
+const ANN_FILTERS: AnnotationFilter[] = ['all', 'annotated', 'unannotated', 'measured', 'unmeasured'];
 const REV_FILTERS: ReviewFilter[] = ['all', 'reviewed', 'unreviewed', 'rereview'];
 
 function parseProject(v: unknown): Project | null {
   if (!isObject(v)) return null;
   const { id, name, classes, images, imageDirPath, nextBoxId, createdAt,
-    filterAnnotation, filterReview, filterClass } = v;
+    pixelPitch, filterAnnotation, filterReview, filterClass } = v;
   if (!isStr(id) || !isStr(name) || !isStr(imageDirPath) || !isStr(createdAt)) return null;
   if (!isNum(nextBoxId) || !Array.isArray(classes) || !Array.isArray(images)) return null;
   if (/[\\/\x00-\x1f]/.test(id)) return null;
@@ -181,6 +194,7 @@ function parseProject(v: unknown): Project | null {
     images: cleanImages, imageDirPath,
     nextBoxId, createdAt,
   };
+  if (isNum(pixelPitch) && pixelPitch > 0) project.pixelPitch = pixelPitch;
   if (isStr(filterAnnotation) && (ANN_FILTERS as string[]).includes(filterAnnotation)) {
     project.filterAnnotation = filterAnnotation as AnnotationFilter;
   }

@@ -82,6 +82,8 @@ class AppState {
     return this.current.images.map((img, i) => ({ img, i })).filter(({ img }) => {
       if (this.filterAnnotation === 'annotated' && img.boxes.length === 0) return false;
       if (this.filterAnnotation === 'unannotated' && img.boxes.length > 0) return false;
+      if (this.filterAnnotation === 'measured' && !img.boxes.some(b => b.measure)) return false;
+      if (this.filterAnnotation === 'unmeasured' && img.boxes.some(b => b.measure)) return false;
       if (this.filterClass !== 'all') {
         const ci = parseInt(this.filterClass);
         if (!img.boxes.some(b => b.classIdx === ci)) return false;
@@ -341,7 +343,12 @@ class AppState {
   toggleMeasureMode() {
     this.measureMode = !this.measureMode;
     this.measureDraw = null;
-    if (!this.measureMode) this.scratchMeasure = null;
+    if (!this.measureMode) {
+      this.scratchMeasure = null;
+      // Belt and braces: force any debounced measurement write to disk now,
+      // rather than trusting the 1s timer to survive whatever happens next.
+      void this.flushSave();
+    }
     // A half-drawn box shouldn't survive a mode switch either.
     this.drawing = null;
     this.drag = null;

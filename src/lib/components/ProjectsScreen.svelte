@@ -300,10 +300,11 @@
       {#each app.projects as p (p.id)}
         {@const totalBoxes = p.images.reduce((s, img) => s + img.boxes.length, 0)}
         {@const annotated = p.images.filter(img => img.boxes.length > 0).length}
+        {@const measurements = p.images.reduce((s, img) => s + img.boxes.filter(b => b.measure).length, 0)}
         <div class="project-item">
           <div class="project-info">
             <div class="project-name">{p.name}</div>
-            <div class="project-detail">{p.images.length} images · {annotated} annotated · {totalBoxes} boxes · {p.classes.join(', ')}</div>
+            <div class="project-detail">{p.images.length} images · {annotated} annotated · {totalBoxes} boxes{measurements > 0 ? ` · ${measurements} measurements` : ''} · {p.classes.join(', ')}</div>
           </div>
           <div class="project-actions">
             <button class="btn-sm btn-primary" onclick={() => openProject(p)}>Open</button>

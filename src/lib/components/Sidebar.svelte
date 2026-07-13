@@ -132,6 +132,8 @@
           { value: 'all', label: 'All images' },
           { value: 'annotated', label: 'Annotated' },
           { value: 'unannotated', label: 'Unannotated' },
+          { value: 'measured', label: 'Has measurements' },
+          { value: 'unmeasured', label: 'No measurements' },
         ]} />
         <Select bind:value={app.filterReview} options={[
           { value: 'all', label: 'Any review status' },
