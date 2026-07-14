@@ -2,6 +2,43 @@ import { invoke, Channel } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { Project } from '$lib/types';
 
+/// Whether a set of projects can be merged given their pixel pitches.
+/// Measurements are stored in pixels and interpreted through the project's
+/// pitch, so mixing pitches (or mixing pitched with unpitched) would make the
+/// merged measurements meaningless. `ok` carries the shared pitch (null if all
+/// unset); otherwise `reason` explains the block.
+export type PitchCompat =
+  | { ok: true; pitch: number | null }
+  | { ok: false; reason: string };
+
+export function pitchCompatibility(projects: Project[]): PitchCompat {
+  if (projects.length === 0) return { ok: true, pitch: null };
+  const hasPitch = projects.filter(p => typeof p.pixelPitch === 'number');
+  const noPitch = projects.filter(p => typeof p.pixelPitch !== 'number');
+
+  if (hasPitch.length > 0 && noPitch.length > 0) {
+    return {
+      ok: false,
+      reason: 'Some selected projects have a pixel pitch and others don\u2019t. Measurements can only be merged when every project shares the same pitch.',
+    };
+  }
+  if (hasPitch.length === 0) return { ok: true, pitch: null }; // all unset
+
+  // All have a pitch: they must agree within a small relative tolerance so a
+  // re-serialised 0.05 vs 0.0500000001 doesn't falsely block.
+  const first = hasPitch[0].pixelPitch as number;
+  const tol = Math.max(1e-9, Math.abs(first) * 1e-6);
+  const distinct = hasPitch.every(p => Math.abs((p.pixelPitch as number) - first) <= tol);
+  if (!distinct) {
+    const values = Array.from(new Set(hasPitch.map(p => p.pixelPitch))).join(', ');
+    return {
+      ok: false,
+      reason: `Selected projects have different pixel pitches (${values}). They must match to merge measurements.`,
+    };
+  }
+  return { ok: true, pitch: first };
+}
+
 export type MergeProgressEvent =
   | { kind: 'start'; data: { total: number; outPath: string } }
   | { kind: 'item'; data: { current: number; filename: string } }
@@ -18,6 +55,9 @@ export interface MergePlan {
   classMaps: number[][];
   projectName: string;
   projectId: string;
+  /// Shared pixel pitch of all source projects (they must match to merge), or
+  /// null when none of them had one.
+  pixelPitch: number | null;
 }
 
 export interface MergeOptions {
@@ -55,6 +95,11 @@ function manifestFor(project: Project, classMap: number[], prefix: string) {
       id: b.id,
       classIdx: classMap[b.classIdx] ?? 0,
       x: b.x, y: b.y, w: b.w, h: b.h,
+      // Measurements are stored as pixel endpoints and are pitch-independent,
+      // so they carry straight through. The merge is gated on all sources
+      // sharing one pixel pitch (see pitchCompatibility), so the copied
+      // endpoints remain comparable in the merged project.
+      measure: b.measure ?? null,
     })),
     reviewed: img.reviewed ?? null,
     dims: img.dims ?? null,
@@ -102,6 +147,7 @@ export async function mergeProjects(
       projectName: plan.projectName,
       projectId: plan.projectId,
       classes: plan.mergedClasses,
+      pixelPitch: plan.pixelPitch,
       createdAt: new Date().toISOString(),
       images,
     },

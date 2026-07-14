@@ -36,6 +36,15 @@
       ],
     },
     {
+      title: 'Measurement',
+      items: [
+        { keys: ['M'], desc: 'Toggle measure mode (stays on until pressed again)' },
+        { keys: ['Drag'], desc: 'Draw a width line on the box it starts on' },
+        { keys: ['Click'], desc: 'Select a box to measure' },
+        { keys: ['Del'], desc: 'Clear the selected box\u2019s measurement' },
+      ],
+    },
+    {
       title: 'Clipboard',
       items: [
         { keys: ['Ctrl', 'C'], sep: '+', desc: 'Copy selected box(es)' },

@@ -26,6 +26,19 @@ pub struct MergeBox {
     pub w: f64,
     pub h: f64,
     pub id: i64,
+    /// Optional width measurement: two endpoints in image pixels. Carried
+    /// through unchanged (merge requires all sources to share a pixel pitch).
+    #[serde(default)]
+    pub measure: Option<MergeMeasure>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeMeasure {
+    pub ax: f64,
+    pub ay: f64,
+    pub bx: f64,
+    pub by: f64,
 }
 
 #[derive(Deserialize)]
@@ -55,6 +68,9 @@ pub struct MergeRequest {
     pub project_id: String,
     /// Final merged class list.
     pub classes: Vec<String>,
+    /// Shared pixel pitch of the sources (mm/px), or None if all were unset.
+    #[serde(default)]
+    pub pixel_pitch: Option<f64>,
     /// ISO timestamp for createdAt.
     pub created_at: String,
     /// All copy operations across both source projects.
@@ -157,11 +173,19 @@ async fn run(
             continue;
         }
 
-        let boxes: Vec<serde_json::Value> = img.boxes.iter().map(|b| serde_json::json!({
-            "id": b.id,
-            "classIdx": b.class_idx,
-            "x": b.x, "y": b.y, "w": b.w, "h": b.h,
-        })).collect();
+        let boxes: Vec<serde_json::Value> = img.boxes.iter().map(|b| {
+            let mut bx = serde_json::json!({
+                "id": b.id,
+                "classIdx": b.class_idx,
+                "x": b.x, "y": b.y, "w": b.w, "h": b.h,
+            });
+            if let Some(m) = &b.measure {
+                bx["measure"] = serde_json::json!({
+                    "ax": m.ax, "ay": m.ay, "bx": m.bx, "by": m.by,
+                });
+            }
+            bx
+        }).collect();
 
         let mut entry = serde_json::json!({
             "filename": img.dest_filename,
@@ -185,7 +209,7 @@ async fn run(
         .max()
         .unwrap_or(-1);
 
-    let project = serde_json::json!({
+    let mut project = serde_json::json!({
         "id": req.project_id,
         "name": req.project_name,
         "classes": req.classes,
@@ -194,6 +218,9 @@ async fn run(
         "nextBoxId": max_id + 1,
         "createdAt": req.created_at,
     });
+    if let Some(p) = req.pixel_pitch {
+        project["pixelPitch"] = serde_json::json!(p);
+    }
 
     let json_path = dest_dir.join("tsia-project.json");
     tokio::fs::write(&json_path, serde_json::to_string_pretty(&project).unwrap())

@@ -44,10 +44,17 @@ Built with [Tauri 2](https://tauri.app) and [SvelteKit](https://kit.svelte.dev).
   originals are untouched). Images are copied under source-prefixed names; an
   interactive table reconciles class names across projects, so inconsistent
   labels like "Lump" and "lumps" can be unified into one class.
+- **Width measurements** (press `M`): draw a line across a defect to record its
+  true width, attached to a bounding box. Set a project **pixel pitch**
+  (mm/pixel) to read lengths in millimetres; measurements are stored as pixel
+  endpoints, so correcting the pitch later reconverts everything. Exported as a
+  non-breaking sidecar (a custom key in COCO, a separate `measurements.json` for
+  YOLO), so only the mm values leave and standard loaders are unaffected.
 - Mark images as **reviewed** to track progress through a dataset. The
   progress bar in the annotate screen reflects this.
-- Per-image **filters** (annotated / unannotated, reviewed / unreviewed /
-  requires re-review, by class) so you can focus on what still needs work.
+- Per-image **filters** (annotated / unannotated, has / no measurements,
+  reviewed / unreviewed / requires re-review, by class) so you can focus on
+  what still needs work.
 - **Autosave** with a 1-second debounce. No save button. Annotations are
   written to `tsia-project.json` inside the image folder (see below).
 - **Undo** stack (50 steps).
@@ -71,6 +78,7 @@ A full reference is in the app (press `?`). The essentials:
   current image at original coordinates)
 - Arrows: nudge the selection by 1 px (hold Shift for 10 px)
 - `X`: toggle "requires re-review"
+- `M`: toggle measure mode; drag on a box to measure a width, `Del` clears the selected box's measurement
 - `Del`: delete selected box(es)
 - `Shift+D`: remove the current image from the project (file on disk is kept; undoable)
 - `Ctrl/Cmd+Z`: undo

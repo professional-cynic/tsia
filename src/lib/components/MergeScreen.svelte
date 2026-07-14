@@ -1,7 +1,7 @@
 <script lang="ts">
   import { app } from '$lib/stores/app.svelte';
   import { MAX_CLASSES } from '$lib/constants';
-  import { mergeProjects, pickMergeFolder, cancelMerge, type MergePlan, type MergeProgressEvent } from '$lib/io/merge';
+  import { mergeProjects, pickMergeFolder, cancelMerge, pitchCompatibility, type MergePlan, type MergeProgressEvent } from '$lib/io/merge';
   import { loadAllProjects, registerProjectFolder } from '$lib/persistence';
   import type { Project } from '$lib/types';
 
@@ -75,6 +75,10 @@
   const mergedCount = $derived(plan ? plan.classes.length : 0);
   const overCap = $derived(mergedCount > MAX_CLASSES);
 
+  // Measurements are only comparable when all sources share one pixel pitch.
+  const pitchCompat = $derived(pitchCompatibility(selected));
+  const canMerge = $derived(!overCap && pitchCompat.ok && selected.length >= 2);
+
   const possibleDupes = $derived.by(() => {
     const counts = new Map<string, number>();
     for (const p of selected) for (const img of p.images) {
@@ -92,7 +96,7 @@
   }
 
   async function runMerge() {
-    if (!plan || overCap || selected.length < 2) return;
+    if (!plan || !canMerge) return;
     const outDir = await pickMergeFolder();
     if (!outDir) return;
 
@@ -101,6 +105,7 @@
       classMaps: plan.maps,
       projectName: projectName.trim() || 'Merged project',
       projectId: genId(),
+      pixelPitch: pitchCompat.ok ? pitchCompat.pitch : null,
     };
 
     const total = selected.reduce((s, p) => s + p.images.length, 0);
@@ -217,8 +222,12 @@
 
       <div class="summary" class:over={overCap}>
         Merged classes: {mergedCount} / {MAX_CLASSES}
-        {#if overCap}— too many. Link more classes to existing ones to get under {MAX_CLASSES}.{/if}
+        {#if overCap}: too many. Link more classes to existing ones to get under {MAX_CLASSES}.{/if}
       </div>
+
+      {#if !pitchCompat.ok}
+        <div class="warn">{pitchCompat.reason}</div>
+      {/if}
 
       {#if possibleDupes > 0}
         <div class="warn">
@@ -231,7 +240,7 @@
     <div class="actions">
       <button onclick={() => phase = 'pick'}>← Back</button>
       <span style="flex:1"></span>
-      <button class="btn-primary" disabled={overCap} onclick={runMerge}>Merge into new folder…</button>
+      <button class="btn-primary" disabled={!canMerge} onclick={runMerge}>Merge into new folder…</button>
     </div>
   {/if}
   </div>
