@@ -59,6 +59,7 @@ pub fn run() {
             fs_helpers::allow_asset_dir,
             fs_helpers::allow_fs_dir,
             opener_bridge::open_external_url,
+            opener_bridge::open_source_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

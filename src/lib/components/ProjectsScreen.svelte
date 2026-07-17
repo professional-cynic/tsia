@@ -251,6 +251,19 @@
 
   let openMessage = $state<string | null>(null);
 
+  /// Open a project's image folder in the system file manager. The path comes
+  /// from the project file; the Rust command validates it before handing it to
+  /// the OS (see opener_bridge).
+  async function openSourceFolder(p: Project) {
+    openMessage = null;
+    try {
+      await invoke('open_source_folder', { dir: p.imageDirPath });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      openMessage = `Could not open ${p.imageDirPath}: ${msg}`;
+    }
+  }
+
   async function openExisting() {
     openMessage = null;
     const dir = await open({ title: 'Open existing project folder', directory: true });
@@ -309,6 +322,7 @@
           <div class="project-actions">
             <button class="btn-sm btn-primary" onclick={() => openProject(p)}>Open</button>
             <button class="btn-sm" onclick={() => exportState = { kind: 'configuring', project: p }}>Export</button>
+            <button class="btn-sm" onclick={() => openSourceFolder(p)} title="Open the image folder in your file manager">Folder</button>
             <button class="btn-sm" onclick={() => renameTarget = p}>Rename</button>
             <button class="btn-sm btn-danger" onclick={() => deleteTarget = p}>Delete</button>
           </div>
