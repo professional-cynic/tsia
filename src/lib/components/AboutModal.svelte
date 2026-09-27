@@ -43,8 +43,8 @@
       data; verify exports before training on them.
     </div>
     <div class="modal-links">
-      <button class="link" onclick={() => open('https://codeberg.org/professional-cynic/tsia')}>Source code &amp; README</button>
-      <button class="link" onclick={() => open('https://codeberg.org/professional-cynic')}>professional-cynic</button>
+      <button class="link" onclick={() => open('https://github.com/professional-cynic/tsia')}>Source code &amp; README</button>
+      <button class="link" onclick={() => open('https://github.com/professional-cynic')}>professional-cynic</button>
       <button class="link" onclick={() => open('https://www.gnu.org/licenses/agpl-3.0.html')}>Licensed under AGPL-3.0</button>
     </div>
     {#if openError}
