@@ -7,12 +7,6 @@ Built with [Tauri 2](https://tauri.app) and [SvelteKit](https://kit.svelte.dev).
 > **Status**: early. Works, used in production by the author, but the
 > feature surface is deliberately small.
 
-> **Where things live**: source code, issues, and contributions on
-> [Codeberg](https://codeberg.org/professional-cynic/tsia). Release
-> downloads and the in-app updater point at
-> [GitHub Releases](https://github.com/professional-cynic/tsia/releases)
-> (Codeberg auto-mirrors there for the build pipeline).
-
  ![TSIA annotating a sample image](/screenshot.png)
 
 ## What it does
