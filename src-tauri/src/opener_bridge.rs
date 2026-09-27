@@ -17,9 +17,9 @@ use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
 const ALLOWED_URLS: &[&str] = &[
-    "https://codeberg.org/professional-cynic",
-    "https://codeberg.org/professional-cynic/",
-    "https://codeberg.org/professional-cynic/tsia",
+    "https://github.com/professional-cynic",
+    "https://github.com/professional-cynic/",
+    "https://github.com/professional-cynic/tsia",
     "https://github.com/professional-cynic/tsia/releases/latest",
     "https://www.gnu.org/licenses/agpl-3.0.html",
 ];

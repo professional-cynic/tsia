@@ -28,7 +28,7 @@
     <div class="home-error">{openError}</div>
   {/if}
   <div class="home-footer">
-    © 2026 <button class="link" onclick={() => open('https://codeberg.org/professional-cynic')}>professional-cynic</button>
+    © 2026 <button class="link" onclick={() => open('https://github.com/professional-cynic/')}>professional-cynic</button>
     · <button class="link" onclick={() => open('https://www.gnu.org/licenses/agpl-3.0.html')}>AGPL-3.0</button>
   </div>
   <div class="home-about">
