@@ -190,7 +190,7 @@ Prerequisites:
 Then:
 
 ```bash
-git clone https://codeberg.org/professional-cynic/tsia.git
+git clone https://github.com/professional-cynic/tsia.git
 cd tsia
 npm install
 npm run tauri dev      # hot-reload development build
@@ -224,18 +224,13 @@ src-tauri/            Rust backend
 ```
 
 ## Contributing
-
-Issues and pull requests on
-[Codeberg](https://codeberg.org/professional-cynic/tsia). The
-GitHub mirror has issues disabled.
-
 Run `npm run check` (svelte-check) and
 `cargo check --manifest-path src-tauri/Cargo.toml` before opening a PR.
 There's no formal test suite yet; this is a weekend-project codebase.
 
 ## Disclaimer
 
-This is a weekend project. It's provided as-is, without warranty of any
+This is a weekend project updated when I need some features. It's provided as-is, without warranty of any
 kind. If TSIA corrupts your annotations, eats your dataset, sets your
 laptop on fire, or produces incorrect bounding boxes that you then train a
 model on and ship to production, that's on you. Back up your data and
