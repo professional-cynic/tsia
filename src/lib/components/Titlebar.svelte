@@ -1,19 +1,13 @@
 <script lang="ts">
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { app } from '$lib/stores/app.svelte';
+  import { flushAndClose } from '$lib/window';
 
   const appWindow = getCurrentWindow();
 
-  // destroy() force-closes immediately; we flush any pending autosave first
-  // so the close-during-debounce window can't lose edits. close-requested
-  // doesn't reliably fire from JS in Tauri 2, hence the manual flush rather
-  // than routing through close() + an event handler.
-  // Requires the core:window:allow-destroy capability — separate from
-  // allow-close, easy to miss.
-  async function close() {
-    await app.flushSave();
-    await appWindow.destroy();
-  }
+  // Flushes any pending autosave before closing, so a close during the
+  // debounce window can't lose edits.
+  const close = flushAndClose;
   async function minimize() { await appWindow.minimize(); }
 </script>
 

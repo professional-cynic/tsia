@@ -7,9 +7,20 @@ mod fs_helpers;
 mod import;
 mod merge;
 mod opener_bridge;
+mod project_file;
 mod util;
 
-use tauri::Manager;
+use std::time::Duration;
+use tauri::{Emitter, Manager, WindowEvent};
+
+/// Emitted to the frontend when the OS asks to close the window (Alt+F4,
+/// Cmd+Q, taskbar). The frontend flushes its pending autosave and then
+/// destroys the window itself.
+const CLOSE_REQUESTED_EVENT: &str = "tsia://close-requested";
+
+/// How long the frontend gets to flush before the window is closed anyway,
+/// so a broken frontend can never make the window impossible to close.
+const CLOSE_GRACE: Duration = Duration::from_secs(5);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -47,9 +58,21 @@ pub fn run() {
             }
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.emit(CLOSE_REQUESTED_EVENT, ());
+                let window = window.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(CLOSE_GRACE);
+                    let _ = window.destroy();
+                });
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             export::export_dataset,
             export::export_cancel,
+            export::plan_negatives,
             import::import_coco,
             import::import_yolo,
             merge::merge_projects,
@@ -60,6 +83,7 @@ pub fn run() {
             fs_helpers::allow_fs_dir,
             opener_bridge::open_external_url,
             opener_bridge::open_source_folder,
+            project_file::write_project_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

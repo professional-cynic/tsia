@@ -18,7 +18,11 @@ type UndoEntry =
   // project-wide). Reversed in one undo step.
   | { kind: 'boxes-multi'; entries: { filename: string; boxes: BoxSnapshot }[] }
   // An image was removed from the project. Re-inserts it at its old index.
-  | { kind: 'image-removed'; img: ImageEntry; index: number };
+  | { kind: 'image-removed'; img: ImageEntry; index: number }
+  // A class was removed. Restores the class list and every affected image's
+  // boxes (their classIdx values were shifted project-wide).
+  | { kind: 'class-removed'; classes: string[]; entries: { filename: string; boxes: BoxSnapshot }[];
+      activeClass: number; filterClass: string };
 
 class AppState {
   // App-level
@@ -75,9 +79,11 @@ class AppState {
   filterReview = $state<ReviewFilter>('all');
   filterClass = $state<string>('all');
 
-  // ── Derived (getters are reactive in Svelte 5 classes) ──
+  // ── Derived ──
+  // $derived, not plain getters: a getter recomputes on every read, and the
+  // filtered list is read several times per render (sidebar, navigation).
 
-  get baseFilteredImages(): { img: ImageEntry; i: number }[] {
+  baseFilteredImages = $derived.by((): { img: ImageEntry; i: number }[] => {
     if (!this.current) return [];
     return this.current.images.map((img, i) => ({ img, i })).filter(({ img }) => {
       if (this.filterAnnotation === 'annotated' && img.boxes.length === 0) return false;
@@ -90,36 +96,35 @@ class AppState {
       }
       return true;
     });
-  }
+  });
 
-  get filteredImages(): { img: ImageEntry; i: number }[] {
+  filteredImages = $derived.by((): { img: ImageEntry; i: number }[] => {
     return this.baseFilteredImages.filter(({ img }) => {
       if (this.filterReview === 'reviewed' && img.reviewed !== true) return false;
       if (this.filterReview === 'unreviewed' && img.reviewed !== undefined) return false;
       if (this.filterReview === 'rereview' && img.reviewed !== false) return false;
       return true;
     });
-  }
+  });
+
+  reviewedCount = $derived(this.current ? this.current.images.filter(img => img.reviewed === true).length : 0);
 
   get reviewProgress(): number {
-    if (!this.current) return 0;
-    const total = this.current.images.length;
-    if (total === 0) return 0;
-    return this.current.images.filter(img => img.reviewed === true).length / total;
-  }
-
-  get reviewedCount(): number {
-    if (!this.current) return 0;
-    return this.current.images.filter(img => img.reviewed === true).length;
+    const total = this.current?.images.length ?? 0;
+    return total === 0 ? 0 : this.reviewedCount / total;
   }
 
   // ── Autosave ────────────────────────────────────────
 
   private saveTimeout: ReturnType<typeof setTimeout> | null = null;
-  saveStatus = $state<'idle' | 'saving'>('idle');
+  saveStatus = $state<'idle' | 'saving' | 'error'>('idle');
+  saveError = $state('');
+  // Saves run one at a time, in order: each write waits for the previous one,
+  // so an older snapshot can never land on disk after a newer one.
+  private saveChain: Promise<void> = Promise.resolve();
 
-  private async writeNow() {
-    if (!this.current) return;
+  private writeNow(): Promise<void> {
+    if (!this.current) return this.saveChain;
     // Snapshot filter state into the project so it survives a switch.
     this.current.filterAnnotation = this.filterAnnotation;
     this.current.filterReview = this.filterReview;
@@ -129,10 +134,21 @@ class AppState {
     // JSON.stringify reads every property through a proxy handler — fine for
     // small projects, but visibly blocking for projects with thousands of
     // images. The snapshot copies once into plain objects, then stringify
-    // runs over those at native speed.
-    const plain = $state.snapshot(this.current);
-    await saveProject(plain as Project);
-    this.saveStatus = 'idle';
+    // runs over those at native speed. Taken now, so the write captures the
+    // state at the moment the save was requested.
+    const plain = $state.snapshot(this.current) as Project;
+    this.saveChain = this.saveChain.then(async () => {
+      try {
+        await saveProject(plain);
+        this.saveStatus = 'idle';
+        this.saveError = '';
+      } catch (e) {
+        this.saveStatus = 'error';
+        this.saveError = e instanceof Error ? e.message : String(e);
+        console.error('Autosave failed:', e);
+      }
+    });
+    return this.saveChain;
   }
 
   scheduleSave() {
@@ -263,6 +279,14 @@ class AppState {
         const img = images.find(i => i.filename === e.filename);
         if (img) img.boxes = e.boxes;
       }
+    } else if (entry.kind === 'class-removed') {
+      this.current.classes = entry.classes;
+      for (const e of entry.entries) {
+        const img = images.find(i => i.filename === e.filename);
+        if (img) img.boxes = e.boxes;
+      }
+      this.activeClass = entry.activeClass;
+      this.filterClass = entry.filterClass;
     } else {
       // 'boxes': restore one image's boxes, looked up by filename so it works
       // regardless of which image is currently shown. Navigate to it so the
@@ -700,15 +724,22 @@ class AppState {
 
   removeClass(idx: number) {
     if (!this.current || this.current.classes.length <= 1) return;
-    // Snapshot every affected image's boxes BEFORE we mutate, as a single
-    // atomic undo entry, so one undo reverses the whole project-wide shift.
+    // Snapshot the class list and every affected image's boxes BEFORE we
+    // mutate, as a single atomic undo entry, so one undo reverses the whole
+    // project-wide shift.
     const entries: { filename: string; boxes: BoxSnapshot }[] = [];
     for (const img of this.current.images) {
-      if (img.boxes.some(b => b.classIdx === idx || b.classIdx > idx)) {
+      if (img.boxes.some(b => b.classIdx >= idx)) {
         entries.push({ filename: img.filename, boxes: $state.snapshot(img.boxes) as Box[] });
       }
     }
-    if (entries.length) this.pushEntry({ kind: 'boxes-multi', entries });
+    this.pushEntry({
+      kind: 'class-removed',
+      classes: $state.snapshot(this.current.classes) as string[],
+      entries,
+      activeClass: this.activeClass,
+      filterClass: this.filterClass,
+    });
     this.current.classes.splice(idx, 1);
     this.current.images.forEach(img => {
       img.boxes.forEach(b => {
@@ -716,7 +747,15 @@ class AppState {
         else if (b.classIdx > idx) b.classIdx--;
       });
     });
-    if (this.activeClass >= this.current.classes.length) this.activeClass = this.current.classes.length - 1;
+    // Indices above the removed class shift down by one; keep the active
+    // class and the class filter pointing at the same class as before.
+    if (this.activeClass === idx) this.activeClass = 0;
+    else if (this.activeClass > idx) this.activeClass--;
+    if (this.filterClass !== 'all') {
+      const fc = parseInt(this.filterClass);
+      if (fc === idx) this.filterClass = 'all';
+      else if (fc > idx) this.filterClass = String(fc - 1);
+    }
     this.scheduleSave();
   }
 }

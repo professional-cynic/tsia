@@ -74,7 +74,10 @@
 
   function clearCanvas() {
     if (!canvasEl || !ctx) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    ctx.restore();
   }
 
   // Re-render on any visual state change, but gate on requestAnimationFrame
@@ -94,13 +97,11 @@
     app.zoom; app.offsetX; app.offsetY;
     app.selectedBox; app.selectedBoxes; app.activeClass;
     app.drawing; app.drag;
-    // Touch the boxes array AND each box's classIdx, so a class
-    // reassignment on the selected box (which doesn't change the
-    // array shape) still re-fires the effect. Other coordinate
-    // mutations are handled either by dragPreview (during drag) or
-    // by add/remove which changes the array length.
+    // Touch the boxes array AND every drawn property of each box, so
+    // in-place edits that don't change the array shape (class reassignment,
+    // arrow-key nudges, a committed drag) still re-fire the effect.
     const boxes = app.current?.images[app.imgIndex]?.boxes;
-    if (boxes) for (const b of boxes) { b.classIdx; b.measure; }
+    if (boxes) for (const b of boxes) { b.classIdx; b.x; b.y; b.w; b.h; b.measure; }
     dragPreview;
     groupPreview;
     app.measureMode; app.measureDraw; app.scratchMeasure;
@@ -374,6 +375,7 @@
       case 'm': case 'M': e.preventDefault(); app.toggleMeasureMode(); break;
       case '?': e.preventDefault(); app.showHelp = !app.showHelp; break;
       case 'Delete':
+      case 'Backspace': // Mac keyboards have no Delete key
         e.preventDefault();
         // In measure mode Delete removes the selected box's measurement, not
         // the box: deleting annotations from a measuring workflow would be a

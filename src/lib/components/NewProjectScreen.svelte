@@ -3,7 +3,7 @@
   import { saveProject } from '$lib/persistence';
   import { CLASS_COLORS, MAX_CLASSES } from '$lib/constants';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { importCOCO, importYOLO, scanImageFolder, allowAssetDir, type ImportedAnnotation } from '$lib/io/import';
+  import { importCOCO, importYOLO, scanImageFolder, allowAssetDir, type ImportedDataset } from '$lib/io/import';
   import type { Project } from '$lib/types';
   import InputModal from './InputModal.svelte';
 
@@ -12,7 +12,12 @@
   let imageDirPath = $state('');
   let pixelPitch = $state('');
   let imageFiles = $state<string[]>([]);
-  let importedAnnotations = $state<Record<string, ImportedAnnotation[]>>({});
+  // Imported boxes keep their class NAME until the project is created, so
+  // renaming, removing or reordering classes in the form can't shift them
+  // onto the wrong class.
+  type PendingBox = { className: string; x: number; y: number; w: number; h: number };
+  let importedAnnotations = $state<Record<string, PendingBox[]>>({});
+  let pendingYoloDir = '';
   let importStatus = $state('');
   let folderStatus = $state('');     // shown under the Images card
   let createError = $state('');      // shown above the Create button
@@ -30,6 +35,9 @@
     const dir = await open({ title: 'Select image folder', directory: true });
     if (!dir) return;
     imageDirPath = dir as string;
+    // Imported annotations were matched against the previous folder.
+    importedAnnotations = {};
+    importStatus = '';
     try {
       imageFiles = await scanImageFolder(imageDirPath);
       if (imageFiles.length === 0) {
@@ -41,15 +49,31 @@
     }
   }
 
+  function applyImport(result: ImportedDataset, label: string) {
+    if (classes.length === 1 && classes[0] === 'defect') classes = [];
+    for (const c of result.classes) { if (!classes.includes(c)) classes.push(c); }
+    const pending: Record<string, PendingBox[]> = {};
+    let boxes = 0;
+    for (const [filename, anns] of Object.entries(result.annotations)) {
+      pending[filename] = anns.map(a => ({ className: result.classes[a.classIdx], x: a.x, y: a.y, w: a.w, h: a.h }));
+      boxes += anns.length;
+    }
+    importedAnnotations = pending;
+    const notes: string[] = [];
+    if (result.unmatched > 0) notes.push(`${result.unmatched} annotated file(s) matched no image in the folder`);
+    if (result.skippedBoxes > 0) notes.push(`${result.skippedBoxes} box(es) could not be read and were skipped`);
+    if (classes.length > MAX_CLASSES) notes.push(`more than ${MAX_CLASSES} classes: only the first ${MAX_CLASSES} get number-key shortcuts`);
+    importStatus = `${label}: ${boxes} annotation(s) on ${Object.keys(pending).length} image(s) imported.`
+      + (notes.length ? ` Note: ${notes.join('; ')}.` : '');
+  }
+
   async function handleImportCOCO() {
+    if (imageFiles.length === 0) { importStatus = 'Load an image folder first.'; return; }
     try {
-      const result = await importCOCO();
+      const result = await importCOCO(imageFiles);
       if (!result) return;
       if (result.name && !name.trim()) name = result.name;
-      if (classes.length === 1 && classes[0] === 'defect') classes = [];
-      for (const c of result.classes) { if (!classes.includes(c)) classes.push(c); }
-      importedAnnotations = result.annotations;
-      importStatus = `COCO: ${Object.values(result.annotations).reduce((s, a) => s + a.length, 0)} annotations imported.`;
+      applyImport(result, 'COCO');
     } catch (e) {
       importStatus = `COCO import failed: ${e instanceof Error ? e.message : String(e)}`;
     }
@@ -58,13 +82,15 @@
   async function handleImportYOLO(fallbackClasses?: string[]) {
     if (imageFiles.length === 0) { importStatus = 'Load an image folder first.'; return; }
     try {
-      const result = await importYOLO(imageFiles, fallbackClasses);
-      if (!result) return;
-      if (result.needsClasses) { showYoloClassesModal = true; return; }
-      if (classes.length === 1 && classes[0] === 'defect') classes = [];
-      for (const c of result.classes) { if (!classes.includes(c)) classes.push(c); }
-      importedAnnotations = result.annotations;
-      importStatus = `YOLO: ${Object.values(result.annotations).reduce((s, a) => s + a.length, 0)} annotations imported.`;
+      // A retry with fallback classes reuses the folder picked the first time.
+      const picked = await importYOLO(imageDirPath, imageFiles, fallbackClasses, fallbackClasses ? pendingYoloDir : undefined);
+      if (!picked) return;
+      if (picked.result.needsClasses) {
+        pendingYoloDir = picked.labelsDir;
+        showYoloClassesModal = true;
+        return;
+      }
+      applyImport(picked.result, 'YOLO');
     } catch (e) {
       importStatus = `YOLO import failed: ${e instanceof Error ? e.message : String(e)}`;
     }
@@ -80,7 +106,7 @@
     createError = '';
     creating = true;
     try {
-      const validClasses = classes.filter(c => c.trim());
+      const validClasses = classes.map(c => c.trim()).filter(Boolean);
       const project: Project = {
         id: 'proj_' + Date.now(),
         name: name.trim(),
@@ -92,7 +118,8 @@
           filename: fn,
           boxes: (importedAnnotations[fn] || []).map((a, i) => ({
             id: i + 1,
-            classIdx: Math.min(a.classIdx, validClasses.length - 1),
+            // A class renamed or removed since the import falls back to the first.
+            classIdx: Math.max(0, validClasses.indexOf(a.className.trim())),
             x: a.x, y: a.y, w: a.w, h: a.h,
           })),
         })),
@@ -163,7 +190,7 @@
     </div>
     <div class="card">
       <div class="card-title">Import Annotations (optional)</div>
-      <div class="hint">Import before editing classes — COCO/YOLO will auto-populate them.</div>
+      <div class="hint">Load the image folder first. Imported classes are added to the class list below.</div>
       <div class="import-row">
         <button onclick={handleImportCOCO}>Import COCO JSON</button>
         <button onclick={() => handleImportYOLO()}>Import YOLO</button>

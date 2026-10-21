@@ -28,6 +28,14 @@ function isSafeAbsoluteDir(p: string): boolean {
   return true;
 }
 
+// An image filename must stay inside its project folder: relative, no drive
+// or UNC prefix, no '..' segment. Rust re-checks this before touching disk.
+function isSafeRelativePath(p: string): boolean {
+  if (p.length === 0 || /[\x00-\x1f]/.test(p)) return false;
+  if (p.startsWith('/') || p.startsWith('\\') || /^[A-Za-z]:/.test(p)) return false;
+  return !p.split(/[\\/]/).includes('..');
+}
+
 // ── fs-scope: image folders must be granted at runtime ─────
 // The static fs scope only covers $APPDATA. Reading/writing a project file by
 // absolute path inside a user-picked image folder requires extending the fs
@@ -152,7 +160,7 @@ function parseImage(v: unknown): ImageEntry | null {
   if (!isObject(v)) return null;
   const { filename, boxes, reviewed, dims } = v;
   if (!isStr(filename) || !Array.isArray(boxes)) return null;
-  if (filename.startsWith('/') || filename.startsWith('\\') || filename.includes('..')) return null;
+  if (!isSafeRelativePath(filename)) return null;
   const cleanBoxes: Box[] = [];
   for (const b of boxes) {
     const box = parseBox(b);
@@ -249,10 +257,17 @@ export async function loadAllProjects(): Promise<Project[]> {
   return projects.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
+/// Write the project file into its image folder. Done in Rust so the write is
+/// atomic (temp file + rename): an interrupted save leaves the previous
+/// version intact instead of a truncated file. Throws on failure.
 export async function saveProject(project: Project): Promise<void> {
-  await allowFolder(project.imageDirPath);
-  const path = await projectFilePath(project.imageDirPath);
-  await writeTextFile(path, JSON.stringify(project, null, 2));
+  if (!isSafeAbsoluteDir(project.imageDirPath)) {
+    throw new Error(`Refusing to save to unsafe path: ${project.imageDirPath}`);
+  }
+  await invoke('write_project_file', {
+    dir: project.imageDirPath,
+    contents: JSON.stringify(project, null, 2),
+  });
   await registerFolder(project.imageDirPath);
 }
 

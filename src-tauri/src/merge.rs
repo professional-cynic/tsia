@@ -1,247 +1,167 @@
-//! Project merge — combines two projects into a brand-new folder. Every image
-//! is COPIED (never hardlinked: the merged project must be fully independent of
-//! its sources) under a filesystem-safe, source-prefixed name so collisions are
+//! Project merge — combines two or more projects into a brand-new folder.
+//! Every image is COPIED (never hardlinked: the merged project must be fully
+//! independent of its sources) under a source-prefixed name so collisions are
 //! impossible by construction. The merged `tsia-project.json` is written into
 //! the new folder, consistent with the json-lives-with-images model.
 //!
-//! Class reconciliation and classIdx remapping are done on the frontend; this
-//! command receives a finished manifest: the final class list, the output
-//! project metadata, and a flat list of copy operations each carrying its
-//! already-remapped boxes. Rust's job is the heavy I/O (copying potentially
-//! thousands of files) off the webview, with progress + cancellation.
+//! Class reconciliation, classIdx remapping and building the merged project
+//! are done on the frontend, which owns the project format. This command
+//! receives the finished project plus a flat list of copy operations; Rust's
+//! job is the heavy I/O (copying potentially thousands of files) off the
+//! webview, with progress + cancellation. It only touches the project to
+//! drop images that weren't copied and to set the folder path.
 
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use serde::{Deserialize, Serialize};
+use crate::project_file::PROJECT_FILE;
+use crate::util::{
+    create_unique_dir, safe_absolute_dir, safe_relative, slug, write_atomic, CancelFlag, Progress,
+};
+use serde::Deserialize;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use tauri::ipc::Channel;
 use tauri::State;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MergeBox {
-    pub class_idx: i64,
-    pub x: f64,
-    pub y: f64,
-    pub w: f64,
-    pub h: f64,
-    pub id: i64,
-    /// Optional width measurement: two endpoints in image pixels. Carried
-    /// through unchanged (merge requires all sources to share a pixel pitch).
-    #[serde(default)]
-    pub measure: Option<MergeMeasure>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MergeMeasure {
-    pub ax: f64,
-    pub ay: f64,
-    pub bx: f64,
-    pub by: f64,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MergeImage {
+pub struct MergeCopy {
     /// Absolute path to the source image file.
     pub src_path: PathBuf,
-    /// Destination filename (already sanitised + source-prefixed by frontend).
+    /// Destination path relative to the new project folder. Must match the
+    /// `filename` of the corresponding image in `project`.
     pub dest_filename: String,
-    /// Boxes with classIdx already remapped to the merged class ordering.
-    pub boxes: Vec<MergeBox>,
-    pub reviewed: Option<bool>,
-    pub dims: Option<Dims>,
 }
-
-#[derive(Deserialize, Serialize, Clone, Copy)]
-pub struct Dims { pub w: f64, pub h: f64 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MergeRequest {
     /// Parent folder in which to create the new project folder.
     pub out_dir: PathBuf,
-    /// Desired name for the new folder + project.
-    pub project_name: String,
-    /// Stable id for the new project (generated frontend-side).
-    pub project_id: String,
-    /// Final merged class list.
-    pub classes: Vec<String>,
-    /// Shared pixel pitch of the sources (mm/px), or None if all were unset.
-    #[serde(default)]
-    pub pixel_pitch: Option<f64>,
-    /// ISO timestamp for createdAt.
-    pub created_at: String,
-    /// All copy operations across both source projects.
-    pub images: Vec<MergeImage>,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase", tag = "kind", content = "data")]
-pub enum MergeProgress {
-    Start { total: usize, out_path: String },
-    Item { current: usize, filename: String },
-    Warning { filename: String, message: String },
-    Done { out_path: String },
-    Cancelled,
-    Failed { message: String },
+    /// The merged project, exactly as it should be saved, minus
+    /// `imageDirPath` (only known once the folder exists).
+    pub project: serde_json::Value,
+    /// All copy operations across the source projects.
+    pub copies: Vec<MergeCopy>,
 }
 
 #[derive(Default)]
-pub struct MergeCancel(pub Arc<AtomicBool>);
+pub struct MergeCancel(pub CancelFlag);
 
 #[tauri::command]
-pub async fn merge_cancel(state: State<'_, MergeCancel>) -> Result<(), String> {
-    state.0.store(true, Ordering::Relaxed);
-    Ok(())
+pub fn merge_cancel(state: State<'_, MergeCancel>) {
+    state.0.cancel();
 }
 
 #[tauri::command]
 pub async fn merge_projects(
     state: State<'_, MergeCancel>,
-    req: MergeRequest,
-    on_event: Channel<MergeProgress>,
+    mut req: MergeRequest,
+    on_event: Channel<Progress>,
 ) -> Result<String, String> {
     let cancel = state.0.clone();
-    cancel.store(false, Ordering::Relaxed);
+    cancel.reset();
 
-    let folder_name = format!("{}_{}", slug(&req.project_name), short_id(&req.project_id));
-    let dest_dir = req.out_dir.join(&folder_name);
+    let name = req.project.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    let id = req.project.get("id").and_then(|v| v.as_str()).unwrap_or("");
+    let folder_name = format!("{}_{}", slug(name), short_id(id));
 
-    if let Err(e) = tokio::fs::create_dir_all(&dest_dir).await {
-        let msg = format!("create merge dir: {e}");
-        let _ = on_event.send(MergeProgress::Failed { message: msg.clone() });
-        return Err(msg);
-    }
+    // Always a fresh folder, so the rollback below can't delete anything
+    // that existed before.
+    let dest_dir = match create_unique_dir(&req.out_dir, &folder_name).await {
+        Ok(d) => d,
+        Err(e) => {
+            let msg = format!("create merge dir: {e}");
+            let _ = on_event.send(Progress::Failed { message: msg.clone() });
+            return Err(msg);
+        }
+    };
 
     let dest_str = dest_dir.to_string_lossy().to_string();
-    let result = run(&req, &dest_dir, &cancel, &on_event).await;
+    let result = run(&mut req, &dest_dir, &cancel, &on_event).await;
 
     match result {
         Ok(true) => {
-            let _ = on_event.send(MergeProgress::Done { out_path: dest_str.clone() });
+            let _ = on_event.send(Progress::Done { out_path: dest_str.clone() });
             Ok(dest_str)
         }
         Ok(false) => {
             let _ = tokio::fs::remove_dir_all(&dest_dir).await;
-            let _ = on_event.send(MergeProgress::Cancelled);
+            let _ = on_event.send(Progress::Cancelled);
             // Cancelled isn't an error, but there's no project. Empty string
             // signals "nothing created"; the frontend checks for it.
             Ok(String::new())
         }
         Err(e) => {
             let _ = tokio::fs::remove_dir_all(&dest_dir).await;
-            let _ = on_event.send(MergeProgress::Failed { message: e.clone() });
+            let _ = on_event.send(Progress::Failed { message: e.clone() });
             Err(e)
         }
     }
 }
 
 async fn run(
-    req: &MergeRequest,
-    dest_dir: &std::path::Path,
-    cancel: &Arc<AtomicBool>,
-    on_event: &Channel<MergeProgress>,
+    req: &mut MergeRequest,
+    dest_dir: &Path,
+    cancel: &CancelFlag,
+    on_event: &Channel<Progress>,
 ) -> Result<bool, String> {
-    let total = req.images.len();
-    on_event.send(MergeProgress::Start {
+    let total = req.copies.len();
+    on_event.send(Progress::Start {
         total,
         out_path: dest_dir.to_string_lossy().to_string(),
     }).map_err(|e| e.to_string())?;
 
-    // Build the project JSON image entries as we copy, so the written file
-    // reflects exactly what landed on disk.
-    let mut json_images: Vec<serde_json::Value> = Vec::with_capacity(total);
+    // Destination names of the images that landed on disk. The project file
+    // keeps only those, so it never lists an image the folder doesn't have.
+    let mut copied: HashSet<&str> = HashSet::new();
 
-    for (idx, img) in req.images.iter().enumerate() {
-        if cancel.load(Ordering::Relaxed) { return Ok(false); }
+    for (idx, copy) in req.copies.iter().enumerate() {
+        if cancel.is_cancelled() { return Ok(false); }
 
-        let dst = dest_dir.join(&img.dest_filename);
         // Copy (never hardlink): the merged project is independent of sources.
-        if let Err(e) = tokio::fs::copy(&img.src_path, &dst).await {
-            // Non-fatal: skip this image, warn, keep going. A missing source
-            // (deleted since the project was made) shouldn't abort the merge.
-            let _ = on_event.send(MergeProgress::Warning {
-                filename: img.dest_filename.clone(),
-                message: format!("copy failed: {e}"),
-            });
-            let _ = on_event.send(MergeProgress::Item {
-                current: idx + 1,
-                filename: img.dest_filename.clone(),
-            });
-            continue;
-        }
-
-        let boxes: Vec<serde_json::Value> = img.boxes.iter().map(|b| {
-            let mut bx = serde_json::json!({
-                "id": b.id,
-                "classIdx": b.class_idx,
-                "x": b.x, "y": b.y, "w": b.w, "h": b.h,
-            });
-            if let Some(m) = &b.measure {
-                bx["measure"] = serde_json::json!({
-                    "ax": m.ax, "ay": m.ay, "bx": m.bx, "by": m.by,
+        // Non-fatal on error: skip this image, warn, keep going. A missing
+        // source (deleted since the project was made) shouldn't abort the merge.
+        match copy_one(copy, dest_dir).await {
+            Ok(()) => { copied.insert(copy.dest_filename.as_str()); }
+            Err(message) => {
+                let _ = on_event.send(Progress::Warning {
+                    filename: copy.dest_filename.clone(),
+                    message,
                 });
             }
-            bx
-        }).collect();
-
-        let mut entry = serde_json::json!({
-            "filename": img.dest_filename,
-            "boxes": boxes,
-        });
-        if let Some(r) = img.reviewed { entry["reviewed"] = serde_json::json!(r); }
-        if let Some(d) = img.dims { entry["dims"] = serde_json::json!({ "w": d.w, "h": d.h }); }
-        json_images.push(entry);
-
-        on_event.send(MergeProgress::Item {
+        }
+        on_event.send(Progress::Item {
             current: idx + 1,
-            filename: img.dest_filename.clone(),
+            filename: copy.dest_filename.clone(),
         }).map_err(|e| e.to_string())?;
     }
 
-    if cancel.load(Ordering::Relaxed) { return Ok(false); }
+    if cancel.is_cancelled() { return Ok(false); }
 
-    // nextBoxId: one past the highest id we wrote, so future boxes don't collide.
-    let max_id = req.images.iter()
-        .flat_map(|i| i.boxes.iter().map(|b| b.id))
-        .max()
-        .unwrap_or(-1);
-
-    let mut project = serde_json::json!({
-        "id": req.project_id,
-        "name": req.project_name,
-        "classes": req.classes,
-        "images": json_images,
-        "imageDirPath": dest_dir.to_string_lossy(),
-        "nextBoxId": max_id + 1,
-        "createdAt": req.created_at,
-    });
-    if let Some(p) = req.pixel_pitch {
-        project["pixelPitch"] = serde_json::json!(p);
+    let project = req.project.as_object_mut().ok_or("project is not an object")?;
+    if let Some(images) = project.get_mut("images").and_then(|v| v.as_array_mut()) {
+        images.retain(|img| {
+            img.get("filename").and_then(|f| f.as_str()).is_some_and(|f| copied.contains(f))
+        });
     }
+    project.insert("imageDirPath".into(), dest_dir.to_string_lossy().into());
 
-    let json_path = dest_dir.join("tsia-project.json");
-    tokio::fs::write(&json_path, serde_json::to_string_pretty(&project).unwrap())
+    let body = serde_json::to_vec_pretty(&req.project).map_err(|e| e.to_string())?;
+    write_atomic(&dest_dir.join(PROJECT_FILE), &body)
         .await
         .map_err(|e| format!("write project file: {e}"))?;
 
     Ok(true)
 }
 
-/// Filesystem-safe slug (same rules as export's slug).
-fn slug(s: &str) -> String {
-    let mut out: String = s.chars().map(|c| {
-        if c.is_ascii_alphanumeric() { c }
-        else if c == '-' || c == '_' { c }
-        else if c.is_whitespace() { '_' }
-        else { '-' }
-    }).collect();
-    while out.starts_with('-') || out.starts_with('_') { out.remove(0); }
-    while out.ends_with('-') || out.ends_with('_') { out.pop(); }
-    if out.is_empty() { out.push_str("project"); }
-    out
+async fn copy_one(copy: &MergeCopy, dest_dir: &Path) -> Result<(), String> {
+    safe_absolute_dir(&copy.src_path).map_err(|e| format!("source {e}"))?;
+    let dst = dest_dir.join(safe_relative(&copy.dest_filename)?);
+    // Images from a subfolder of a source project keep that subfolder.
+    if let Some(parent) = dst.parent() {
+        tokio::fs::create_dir_all(parent).await.map_err(|e| format!("mkdir failed: {e}"))?;
+    }
+    tokio::fs::copy(&copy.src_path, &dst).await.map_err(|e| format!("copy failed: {e}"))?;
+    Ok(())
 }
 
 /// Last segment of a project id, trimmed, for a short unique folder suffix.
@@ -249,4 +169,34 @@ fn short_id(id: &str) -> String {
     let tail = id.rsplit('_').next().unwrap_or(id);
     let s: String = tail.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
     if s.is_empty() { "merged".to_string() } else { s }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn short_id_uses_last_segment() {
+        assert_eq!(short_id("proj_1700000000000_ab12cd"), "ab12cd");
+        assert_eq!(short_id("___"), "merged");
+    }
+
+    #[tokio::test]
+    async fn copy_one_creates_subfolders_and_rejects_escapes() {
+        let base = std::env::temp_dir().join(format!("tsia-merge-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("src/sub")).unwrap();
+        std::fs::create_dir_all(base.join("dst")).unwrap();
+        std::fs::write(base.join("src/sub/a.jpg"), b"x").unwrap();
+
+        let ok = MergeCopy { src_path: base.join("src/sub/a.jpg"), dest_filename: "p_sub/a.jpg".into() };
+        copy_one(&ok, &base.join("dst")).await.unwrap();
+        assert!(base.join("dst/p_sub/a.jpg").exists());
+
+        let escape = MergeCopy { src_path: base.join("src/sub/a.jpg"), dest_filename: "../a.jpg".into() };
+        assert!(copy_one(&escape, &base.join("dst")).await.is_err());
+        assert!(!base.join("a.jpg").exists());
+
+        std::fs::remove_dir_all(&base).unwrap();
+    }
 }

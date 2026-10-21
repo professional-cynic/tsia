@@ -72,8 +72,8 @@ A full reference is in the app (press `?`). The essentials:
   current image at original coordinates)
 - Arrows: nudge the selection by 1 px (hold Shift for 10 px)
 - `X`: toggle "requires re-review"
-- `M`: toggle measure mode; drag on a box to measure a width, `Del` clears the selected box's measurement
-- `Del`: delete selected box(es)
+- `M`: toggle measure mode; drag on a box to measure a width, `Del` (or `Backspace`) clears the selected box's measurement
+- `Del` or `Backspace`: delete selected box(es)
 - `Shift+D`: remove the current image from the project (file on disk is kept; undoable)
 - `Ctrl/Cmd+Z`: undo
 - Scroll to zoom, middle-drag to pan, `Esc` to deselect, `F11` for fullscreen

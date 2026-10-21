@@ -12,6 +12,7 @@
 //! Both are invoked with paths/URLs from the frontend and act with the
 //! process's full privileges: **these commands are the security boundary.**
 
+use crate::util::safe_absolute_dir;
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
@@ -51,12 +52,7 @@ pub fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
 /// already validates on load, but this must stand on its own.
 #[tauri::command]
 pub async fn open_source_folder(app: AppHandle, dir: PathBuf) -> Result<(), String> {
-    if !dir.is_absolute() {
-        return Err("path is not absolute".to_string());
-    }
-    if dir.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
-        return Err("path contains a parent-directory traversal".to_string());
-    }
+    safe_absolute_dir(&dir)?;
     let meta = tokio::fs::metadata(&dir)
         .await
         .map_err(|e| format!("cannot open {}: {e}", dir.display()))?;

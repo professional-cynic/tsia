@@ -103,9 +103,10 @@
   {/if}
 
   <!-- Autosave indicator -->
-  <div class="autosave" class:is-saving={app.saveStatus === 'saving'}>
+  <div class="autosave" class:is-saving={app.saveStatus === 'saving'} class:is-error={app.saveStatus === 'error'}
+    title={app.saveStatus === 'error' ? app.saveError : undefined}>
     <span class="autosave-dot"></span>
-    <span class="autosave-text">{app.saveStatus === 'saving' ? 'Saving…' : 'Autosaved'}</span>
+    <span class="autosave-text">{app.saveStatus === 'saving' ? 'Saving…' : app.saveStatus === 'error' ? 'Save failed (hover for details)' : 'Autosaved'}</span>
   </div>
 </div>
 
@@ -172,6 +173,8 @@
   .autosave-text { font-size: 10px; color: var(--success); }
   .autosave.is-saving .autosave-dot { background: var(--danger); animation: blink 0.6s ease-in-out infinite; }
   .autosave.is-saving .autosave-text { color: var(--danger); }
+  .autosave.is-error .autosave-dot { background: var(--danger); }
+  .autosave.is-error .autosave-text { color: var(--danger); font-weight: 700; }
 
   @keyframes blink {
     0%, 100% { opacity: 1; }

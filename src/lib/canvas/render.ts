@@ -44,15 +44,26 @@ export function renderCanvas(p: RenderParams) {
   // overstates the drawable area and the image gets scaled into a shorter box
   // than the fit math assumed (bottom cropped). clientWidth/Height of the
   // canvas element is the true drawable area.
-  canvas.width = canvas.clientWidth;
-  canvas.height = canvas.clientHeight;
+  //
+  // The buffer is in device pixels (× devicePixelRatio) so the image stays
+  // sharp on HiDPI screens; the transform below lets every drawing call keep
+  // working in CSS pixels. Only reallocated when the size actually changes:
+  // assigning width/height always clears and reallocates the buffer.
+  const dpr = window.devicePixelRatio || 1;
+  const bw = Math.round(canvas.clientWidth * dpr);
+  const bh = Math.round(canvas.clientHeight * dpr);
+  if (canvas.width !== bw || canvas.height !== bh) {
+    canvas.width = bw;
+    canvas.height = bh;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   // Pull theme-dependent colours from CSS vars. They inherit, so reading
   // from the canvas element works and avoids a separate wrap reference.
   const styles = getComputedStyle(canvas);
   const handleFill = styles.getPropertyValue('--handle-fill').trim() || '#fff';
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
   const dw = image.naturalWidth * zoom;
   const dh = image.naturalHeight * zoom;
   ctx.drawImage(image, offsetX, offsetY, dw, dh);

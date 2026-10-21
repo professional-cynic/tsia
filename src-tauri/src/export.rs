@@ -3,10 +3,10 @@
 //! file copies or hardlinks, dispatches work across a bounded pool of tasks,
 //! and streams progress to the frontend via a typed IPC channel.
 
-use crate::util::strip_ext;
+use crate::util::{create_unique_dir, io_err, safe_relative, slug, strip_ext, CancelFlag, Progress};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::ipc::Channel;
@@ -73,28 +73,10 @@ pub struct ExportRequest {
     pub neg_ratio: f32,
 }
 
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase", tag = "kind", content = "data")]
-pub enum Progress {
-    /// Sent once at the start with the total number of items and the
-    /// resolved output path of the wrapper directory.
-    Start { total: usize, out_path: String },
-    /// Sent after each image finishes (or is skipped).
-    Item { current: usize, filename: String },
-    /// Sent when a single image was skipped due to a non-fatal error.
-    Warning { filename: String, message: String },
-    /// Sent on successful completion.
-    Done { out_path: String },
-    /// Sent if cancelled before completion.
-    Cancelled,
-    /// Sent if a fatal error halts the export.
-    Failed { message: String },
-}
-
 // ── Shared cancel state ──────────────────────────────────
 
 #[derive(Default)]
-pub struct ExportCancel(pub Arc<AtomicBool>);
+pub struct ExportCancel(pub CancelFlag);
 
 // ── Commands ─────────────────────────────────────────────
 
@@ -105,7 +87,7 @@ pub async fn export_dataset(
     on_event: Channel<Progress>,
 ) -> Result<(), String> {
     let cancel = state.0.clone();
-    cancel.store(false, Ordering::Relaxed);
+    cancel.reset();
 
     // Build the wrapper directory inside the user's chosen folder. Naming:
     //   "<project>_<format>_<YYYYMMDD-HHMMSS>"
@@ -117,15 +99,18 @@ pub async fn export_dataset(
         format_slug(req.format),
         stamp,
     );
-    let wrapper = req.out_dir.join(&wrapper_name);
 
     // Create the wrapper up-front so we have a single root to roll back on
-    // cancel/failure.
-    if let Err(e) = tokio::fs::create_dir_all(&wrapper).await {
-        let msg = format!("create wrapper dir: {e}");
-        let _ = on_event.send(Progress::Failed { message: msg.clone() });
-        return Err(msg);
-    }
+    // cancel/failure. Always a fresh folder (suffixed if the name is taken),
+    // so the rollback can never delete anything that existed before.
+    let wrapper = match create_unique_dir(&req.out_dir, &wrapper_name).await {
+        Ok(w) => w,
+        Err(e) => {
+            let msg = format!("create wrapper dir: {e}");
+            let _ = on_event.send(Progress::Failed { message: msg.clone() });
+            return Err(msg);
+        }
+    };
 
     let wrapper_str = wrapper.to_string_lossy().to_string();
 
@@ -154,7 +139,26 @@ pub async fn export_dataset(
 
 #[tauri::command]
 pub fn export_cancel(state: State<'_, ExportCancel>) {
-    state.0.store(true, Ordering::Relaxed);
+    state.0.cancel();
+}
+
+#[derive(Serialize)]
+pub struct NegativePlan {
+    pub pos: usize,
+    pub neg: usize,
+}
+
+/// How many positives and negatives an export would keep for a target
+/// negative fraction (`target` < 0 = no target). Used by the export dialog's
+/// live preview, so the preview and the export share one implementation.
+#[tauri::command]
+pub fn plan_negatives(positives: usize, negatives: usize, target: f32) -> NegativePlan {
+    let (pos, neg) = if (0.0..=1.0).contains(&target) {
+        neg_plan(positives, negatives, target)
+    } else {
+        (positives, negatives)
+    };
+    NegativePlan { pos, neg }
 }
 
 // ── Implementation ───────────────────────────────────────
@@ -163,7 +167,7 @@ pub fn export_cancel(state: State<'_, ExportCancel>) {
 async fn run(
     req: &ExportRequest,
     wrapper: &Path,
-    cancel: &Arc<AtomicBool>,
+    cancel: &CancelFlag,
     on_event: &Channel<Progress>,
 ) -> Result<bool, String> {
     // Export every image passed in. Box-less images are kept as negative
@@ -171,7 +175,19 @@ async fn run(
     // frontend decides the subset to send (e.g. reviewed-only); this layer
     // no longer drops empties. COCO represents a negative as an image entry
     // with no annotations; YOLO as an image with no label file (see writers).
-    let mut all_images: Vec<ExportImage> = req.images.clone();
+    //
+    // Filenames come from the project file and are joined onto both the
+    // source and the output folder, so anything that could escape them is
+    // refused here.
+    let mut all_images: Vec<ExportImage> = Vec::with_capacity(req.images.len());
+    for img in &req.images {
+        match safe_relative(&img.filename) {
+            Ok(_) => all_images.push(img.clone()),
+            Err(message) => {
+                let _ = on_event.send(Progress::Warning { filename: img.filename.clone(), message });
+            }
+        }
+    }
     // Shuffle before splitting so file order doesn't bias the train/val
     // partition (sequential frames or clustered negatives would otherwise
     // skew it). Seeded from the project id (stable across renames), so the
@@ -231,7 +247,7 @@ async fn run(
     let mut set = JoinSet::new();
 
     for (idx, img) in all_images.into_iter().enumerate() {
-        if cancel.load(Ordering::Relaxed) { break; }
+        if cancel.is_cancelled() { break; }
 
         let permits = permits.clone();
         let counter = counter.clone();
@@ -243,7 +259,7 @@ async fn run(
 
         set.spawn(async move {
             let _permit = permits.acquire().await.unwrap();
-            if cancel.load(Ordering::Relaxed) { return None; }
+            if cancel.is_cancelled() { return None; }
 
             let src = image_dir.join(&img.filename);
             let dst = dst_img_dir.join(&img.filename);
@@ -262,16 +278,24 @@ async fn run(
                 }
             }
 
-            let (w, h) = match imagesize::size(&src) {
-                Ok(d) => (d.width as u32, d.height as u32),
+            // Header-only read, but still blocking file I/O: keep it off the
+            // async worker threads.
+            let size_src = src.clone();
+            let (w, h) = match tokio::task::spawn_blocking(move || imagesize::size(&size_src)).await {
+                Ok(Ok(d)) => (d.width as u32, d.height as u32),
+                Ok(Err(e)) => {
+                    warn(format!("dim read {src:?} failed: {e}"));
+                    return None;
+                }
                 Err(e) => {
                     warn(format!("dim read {src:?} failed: {e}"));
                     return None;
                 }
             };
 
+            // The wrapper is freshly created, so there is never an existing
+            // file at `dst` to replace.
             if link_mode_is_link {
-                let _ = tokio::fs::remove_file(&dst).await;
                 if let Err(e) = tokio::fs::hard_link(&src, &dst).await {
                     warn(format!("hardlink {src:?} -> {dst:?} failed: {e}"));
                     return None;
@@ -300,7 +324,7 @@ async fn run(
         }
     }
 
-    if cancel.load(Ordering::Relaxed) { return Ok(false); }
+    if cancel.is_cancelled() { return Ok(false); }
 
     records.sort_by_key(|r| r.idx);
 
@@ -641,8 +665,24 @@ fn shuffle<T>(items: &mut [T], seed: u64) {
 fn apply_neg_target(images: Vec<ExportImage>, t: f32) -> Vec<ExportImage> {
     let p = images.iter().filter(|i| !i.boxes.is_empty()).count();
     let n = images.len() - p;
+    let (keep_pos, keep_neg) = neg_plan(p, n, t);
 
-    // How many of each to keep (mirrors the frontend preview exactly).
+    let mut seen_pos = 0usize;
+    let mut seen_neg = 0usize;
+    images.into_iter().filter(|img| {
+        if img.boxes.is_empty() {
+            seen_neg += 1;
+            seen_neg <= keep_neg
+        } else {
+            seen_pos += 1;
+            seen_pos <= keep_pos
+        }
+    }).collect()
+}
+
+/// How many of `p` positives and `n` negatives to keep so negatives make up
+/// the fraction `t` (0..=1) of the result, trimming whichever side is surplus.
+fn neg_plan(p: usize, n: usize, t: f32) -> (usize, usize) {
     let (keep_pos, keep_neg) = if t <= 0.0 {
         (p, 0)
     } else if t >= 1.0 {
@@ -659,20 +699,7 @@ fn apply_neg_target(images: Vec<ExportImage>, t: f32) -> Vec<ExportImage> {
             (((n as f32) * (1.0 - t) / t).round() as usize, n)
         }
     };
-    let keep_pos = keep_pos.min(p);
-    let keep_neg = keep_neg.min(n);
-
-    let mut seen_pos = 0usize;
-    let mut seen_neg = 0usize;
-    images.into_iter().filter(|img| {
-        if img.boxes.is_empty() {
-            seen_neg += 1;
-            seen_neg <= keep_neg
-        } else {
-            seen_pos += 1;
-            seen_pos <= keep_pos
-        }
-    }).collect()
+    (keep_pos.min(p), keep_neg.min(n))
 }
 
 /// Stable seed derived from the project id, so different projects get
@@ -686,26 +713,6 @@ fn seed_from(name: &str) -> u64 {
         h = h.wrapping_mul(0x100000001B3);
     }
     h
-}
-
-fn io_err(label: &'static str) -> impl Fn(std::io::Error) -> String {
-    move |e| format!("{label}: {e}")
-}
-
-/// Filesystem-safe slug of an arbitrary string. Keeps ASCII alphanumerics,
-/// dashes, and underscores. Spaces become underscores; everything else is
-/// stripped. Leading/trailing dashes are trimmed.
-fn slug(s: &str) -> String {
-    let mut out: String = s.chars().map(|c| {
-        if c.is_ascii_alphanumeric() { c }
-        else if c == '-' || c == '_' { c }
-        else if c.is_whitespace() { '_' }
-        else { '-' }
-    }).collect();
-    while out.starts_with('-') || out.starts_with('_') { out.remove(0); }
-    while out.ends_with('-') || out.ends_with('_') { out.pop(); }
-    if out.is_empty() { out.push_str("project"); }
-    out
 }
 
 fn format_slug(f: Format) -> &'static str {
@@ -753,4 +760,46 @@ fn ymdhms(secs: i64) -> (i32, u32, u32, u32, u32, u32) {
     let y = if m <= 2 { y + 1 } else { y };
 
     (y, m, d, h, mi, s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn neg_plan_cases() {
+        assert_eq!(neg_plan(80, 20, 0.0), (80, 0));
+        assert_eq!(neg_plan(80, 20, 1.0), (0, 20));
+        assert_eq!(neg_plan(80, 0, 1.0), (80, 0));
+        assert_eq!(neg_plan(80, 0, 0.3), (80, 0));
+        assert_eq!(neg_plan(0, 20, 0.3), (0, 20));
+        // Enough negatives: keep all positives, trim negatives to 10%.
+        assert_eq!(neg_plan(90, 50, 0.1), (90, 10));
+        // Too few negatives: keep all negatives, trim positives.
+        assert_eq!(neg_plan(90, 10, 0.5), (10, 10));
+        // No target from the command: everything is kept.
+        let p = plan_negatives(90, 50, -1.0);
+        assert_eq!((p.pos, p.neg), (90, 50));
+    }
+
+    #[test]
+    fn shuffle_is_deterministic_per_seed() {
+        let mut a: Vec<u32> = (0..50).collect();
+        let mut b = a.clone();
+        shuffle(&mut a, seed_from("proj_1"));
+        shuffle(&mut b, seed_from("proj_1"));
+        assert_eq!(a, b);
+        let mut c: Vec<u32> = (0..50).collect();
+        shuffle(&mut c, seed_from("proj_2"));
+        assert_ne!(a, c);
+        a.sort();
+        assert_eq!(a, (0..50).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn civil_date_conversion() {
+        assert_eq!(ymdhms(0), (1970, 1, 1, 0, 0, 0));
+        assert_eq!(ymdhms(951_782_400), (2000, 2, 29, 0, 0, 0));
+        assert_eq!(ymdhms(1_767_225_599), (2025, 12, 31, 23, 59, 59));
+    }
 }

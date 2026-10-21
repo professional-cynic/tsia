@@ -2,17 +2,11 @@ import { invoke, Channel } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { Project } from '$lib/types';
 import { measureLengthMm } from '$lib/types';
+import type { ProgressEvent } from './progress';
 
+export type { ProgressEvent };
 export type Format = 'coco' | 'yolo';
 export type LinkMode = 'copy' | 'link';
-
-export type ProgressEvent =
-  | { kind: 'start'; data: { total: number; outPath: string } }
-  | { kind: 'item'; data: { current: number; filename: string } }
-  | { kind: 'warning'; data: { filename: string; message: string } }
-  | { kind: 'done'; data: { outPath: string } }
-  | { kind: 'cancelled' }
-  | { kind: 'failed'; data: { message: string } };
 
 export interface ExportOptions {
   format: Format;
@@ -61,4 +55,16 @@ export async function exportDataset(project: Project, opts: ExportOptions): Prom
 
 export async function cancelExport(): Promise<void> {
   await invoke('export_cancel');
+}
+
+/// How many images with boxes (pos) and without (neg) an export would keep
+/// for a target negative percentage (< 0 = include everything). Computed by
+/// the same Rust code the export uses, so the preview can't drift from it.
+export async function planNegatives(
+  positives: number, negatives: number, targetPct: number,
+): Promise<{ pos: number; neg: number }> {
+  return await invoke('plan_negatives', {
+    positives, negatives,
+    target: targetPct < 0 ? -1 : targetPct / 100,
+  });
 }

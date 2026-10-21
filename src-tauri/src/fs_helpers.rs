@@ -10,18 +10,29 @@
 //! only ever invoke them with paths the user picked via a dialog. Adding new
 //! Rust fs commands without that discipline would widen the attack surface.
 
-use std::path::PathBuf;
+use crate::util::safe_absolute_dir;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_fs::FsExt;
 
 const IMG_EXT: &[&str] = &["png", "jpg", "jpeg", "bmp", "webp"];
 
+/// Every supported image under `dir`, recursively, as sorted `/`-separated
+/// paths relative to `dir`.
 #[tauri::command]
 pub async fn scan_image_folder(dir: PathBuf) -> Result<Vec<String>, String> {
-    let mut out: Vec<String> = Vec::new();
-    scan(&dir, "", &mut out).await?;
-    out.sort();
-    Ok(out)
+    tokio::task::spawn_blocking(move || {
+        let mut out: Vec<String> = Vec::new();
+        for rel in walk_files(&dir)? {
+            let is_image = Path::new(&rel).extension().and_then(|e| e.to_str())
+                .is_some_and(|ext| IMG_EXT.iter().any(|e| ext.eq_ignore_ascii_case(e)));
+            if is_image { out.push(rel); }
+        }
+        out.sort();
+        Ok(out)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Returns true if the path exists and is a directory. Used by the
@@ -43,62 +54,85 @@ pub async fn dir_exists(path: PathBuf) -> bool {
 /// having been picked from a dialog). This restricts the asset protocol to
 /// exactly the folders the user has chosen this session.
 ///
-/// Returns Err if the path is missing or isn't a directory. Project-open
-/// flows should call `dir_exists` first and trigger the relocate prompt on
-/// false before invoking this; new-project flows have already validated via
-/// the dialog. A best-effort caller can still ignore the error — the only
-/// observable consequence is that the canvas will fail to load images for
-/// the session.
+/// Returns Err if the path is unsafe, missing or isn't a directory.
+/// Project-open flows should call `dir_exists` first and trigger the relocate
+/// prompt on false before invoking this; new-project flows have already
+/// validated via the dialog. A best-effort caller can still ignore the error —
+/// the only observable consequence is that the canvas will fail to load
+/// images for the session.
 #[tauri::command]
 pub async fn allow_asset_dir(app: AppHandle, dir: PathBuf) -> Result<(), String> {
-    let meta = tokio::fs::metadata(&dir).await.map_err(|e| format!("stat: {e}"))?;
-    if !meta.is_dir() {
-        return Err("path is not a directory".to_string());
-    }
+    check_dir(&dir).await?;
     app.asset_protocol_scope()
         .allow_directory(&dir, true)
         .map_err(|e| format!("allow_directory: {e}"))
 }
 
 /// Expand the fs plugin's runtime scope to cover a single directory,
-/// recursively. Needed because the project JSON now lives inside the image
+/// recursively. Needed because the project JSON lives inside the image
 /// folder (`<dir>/tsia-project.json`) so it travels with the dataset on
 /// backup/move. The static fs scope only covers $APPDATA; image folders are
 /// user-picked and added here at runtime, same discipline as the asset scope.
 ///
-/// Returns Err if the path is missing or isn't a directory.
+/// Returns Err if the path is unsafe, missing or isn't a directory.
 #[tauri::command]
 pub async fn allow_fs_dir(app: AppHandle, dir: PathBuf) -> Result<(), String> {
-    let meta = tokio::fs::metadata(&dir).await.map_err(|e| format!("stat: {e}"))?;
+    check_dir(&dir).await?;
+    app.fs_scope()
+        .allow_directory(&dir, true)
+        .map_err(|e| format!("allow_directory: {e}"))
+}
+
+async fn check_dir(dir: &Path) -> Result<(), String> {
+    safe_absolute_dir(dir)?;
+    let meta = tokio::fs::metadata(dir).await.map_err(|e| format!("stat: {e}"))?;
     if !meta.is_dir() {
         return Err("path is not a directory".to_string());
     }
-    let scope = app.fs_scope();
-    scope.allow_directory(&dir, true).map_err(|e| format!("allow_directory: {e}"))?;
     Ok(())
 }
 
-fn scan<'a>(
-    base: &'a std::path::Path,
-    prefix: &'a str,
-    out: &'a mut Vec<String>,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + 'a>> {
-    Box::pin(async move {
-        let mut entries = tokio::fs::read_dir(base).await.map_err(|e| e.to_string())?;
-        while let Some(entry) = entries.next_entry().await.map_err(|e| e.to_string())? {
+/// All regular files under `base`, recursively, as `/`-separated paths
+/// relative to `base`. Unreadable subfolders and entries are skipped; only a
+/// failure to read `base` itself is an error. Blocking: call it from
+/// `spawn_blocking`.
+pub fn walk_files(base: &Path) -> Result<Vec<String>, String> {
+    let mut out = Vec::new();
+    let mut stack: Vec<(PathBuf, String)> = vec![(base.to_path_buf(), String::new())];
+    while let Some((dir, prefix)) = stack.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(e) if prefix.is_empty() => return Err(e.to_string()),
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
-            let path = entry.path();
-            let ft = match entry.file_type().await { Ok(t) => t, Err(_) => continue };
-            if ft.is_dir() {
-                let next_prefix = if prefix.is_empty() { name } else { format!("{prefix}/{name}") };
-                scan(&path, &next_prefix, out).await?;
-            } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                if IMG_EXT.iter().any(|e| ext.eq_ignore_ascii_case(e)) {
-                    let rel = if prefix.is_empty() { name } else { format!("{prefix}/{name}") };
-                    out.push(rel);
-                }
+            let rel = if prefix.is_empty() { name } else { format!("{prefix}/{name}") };
+            match entry.file_type() {
+                Ok(t) if t.is_dir() => stack.push((entry.path(), rel)),
+                Ok(t) if t.is_file() || t.is_symlink() => out.push(rel),
+                _ => {}
             }
         }
-        Ok(())
-    })
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn walk_files_is_recursive_and_relative() {
+        let base = std::env::temp_dir().join(format!("tsia-walk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("a/b")).unwrap();
+        std::fs::write(base.join("top.jpg"), b"").unwrap();
+        std::fs::write(base.join("a/b/deep.PNG"), b"").unwrap();
+        let mut files = walk_files(&base).unwrap();
+        files.sort();
+        assert_eq!(files, vec!["a/b/deep.PNG", "top.jpg"]);
+        assert!(walk_files(&base.join("missing")).is_err());
+        std::fs::remove_dir_all(&base).unwrap();
+    }
 }

@@ -1,6 +1,7 @@
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import type { Project } from '$lib/types';
+import type { Project, ImageEntry, Box } from '$lib/types';
+import type { ProgressEvent } from './progress';
 
 /// Whether a set of projects can be merged given their pixel pitches.
 /// Measurements are stored in pixels and interpreted through the project's
@@ -39,13 +40,7 @@ export function pitchCompatibility(projects: Project[]): PitchCompat {
   return { ok: true, pitch: first };
 }
 
-export type MergeProgressEvent =
-  | { kind: 'start'; data: { total: number; outPath: string } }
-  | { kind: 'item'; data: { current: number; filename: string } }
-  | { kind: 'warning'; data: { filename: string; message: string } }
-  | { kind: 'done'; data: { outPath: string } }
-  | { kind: 'cancelled' }
-  | { kind: 'failed'; data: { message: string } };
+export type MergeProgressEvent = ProgressEvent;
 
 // A reconciliation plan for N projects. classMaps[k][sourceClassIdx] = merged
 // class index, for the k-th project (same order as the projects array passed
@@ -70,8 +65,7 @@ export async function pickMergeFolder(): Promise<string | null> {
   return dirPath ? (dirPath as string) : null;
 }
 
-// Filesystem-safe slug mirroring the Rust `slug()` so the frontend preview and
-// the actual written names agree.
+// Filesystem-safe slug mirroring `slug()` in src-tauri/src/util.rs.
 function slug(s: string): string {
   let out = Array.from(s).map(c => {
     if (/[A-Za-z0-9]/.test(c)) return c;
@@ -81,29 +75,6 @@ function slug(s: string): string {
   }).join('');
   out = out.replace(/^[-_]+/, '').replace(/[-_]+$/, '');
   return out === '' ? 'project' : out;
-}
-
-// Build the flat copy-manifest for one source project: each image gets a
-// source-prefixed, sanitised destination name and its boxes remapped to the
-// merged class ordering. `prefix` is supplied by the caller so it can be made
-// unique across all projects being merged.
-function manifestFor(project: Project, classMap: number[], prefix: string) {
-  return project.images.map(img => ({
-    srcPath: joinPath(project.imageDirPath, img.filename),
-    destFilename: `${prefix}_${img.filename}`,
-    boxes: img.boxes.map(b => ({
-      id: b.id,
-      classIdx: classMap[b.classIdx] ?? 0,
-      x: b.x, y: b.y, w: b.w, h: b.h,
-      // Measurements are stored as pixel endpoints and are pitch-independent,
-      // so they carry straight through. The merge is gated on all sources
-      // sharing one pixel pitch (see pitchCompatibility), so the copied
-      // endpoints remain comparable in the merged project.
-      measure: b.measure ?? null,
-    })),
-    reviewed: img.reviewed ?? null,
-    dims: img.dims ?? null,
-  }));
 }
 
 // Sanitised, collision-free prefixes for each project. If two projects sanitise
@@ -127,6 +98,56 @@ function joinPath(dir: string, file: string): string {
   return `${trimmed}${sep}${file}`;
 }
 
+/// Build the merged project and the list of files to copy into it. Each image
+/// gets a source-prefixed destination name and its boxes remapped to the
+/// merged class ordering. The project is complete except for imageDirPath,
+/// which Rust fills in once the folder exists.
+function buildMerge(projects: Project[], plan: MergePlan) {
+  const prefixes = uniquePrefixes(projects);
+  const copies: { srcPath: string; destFilename: string }[] = [];
+  const images: ImageEntry[] = [];
+  let maxId = 0;
+
+  projects.forEach((p, k) => {
+    const classMap = plan.classMaps[k];
+    for (const img of p.images) {
+      const destFilename = `${prefixes[k]}_${img.filename}`;
+      copies.push({ srcPath: joinPath(p.imageDirPath, img.filename), destFilename });
+      const entry: ImageEntry = {
+        filename: destFilename,
+        boxes: img.boxes.map(b => {
+          maxId = Math.max(maxId, b.id);
+          const box: Box = {
+            id: b.id,
+            classIdx: classMap[b.classIdx] ?? 0,
+            x: b.x, y: b.y, w: b.w, h: b.h,
+          };
+          // Measurements are stored as pixel endpoints and are
+          // pitch-independent, so they carry straight through. The merge is
+          // gated on all sources sharing one pixel pitch (see
+          // pitchCompatibility), so the copied endpoints stay comparable.
+          if (b.measure) box.measure = { ...b.measure };
+          return box;
+        }),
+      };
+      if (img.reviewed !== undefined) entry.reviewed = img.reviewed;
+      if (img.dims) entry.dims = { ...img.dims };
+      images.push(entry);
+    }
+  });
+
+  const project: Omit<Project, 'imageDirPath'> = {
+    id: plan.projectId,
+    name: plan.projectName,
+    classes: plan.mergedClasses,
+    images,
+    nextBoxId: maxId + 1,
+    createdAt: new Date().toISOString(),
+  };
+  if (plan.pixelPitch !== null) project.pixelPitch = plan.pixelPitch;
+  return { project, copies };
+}
+
 export async function mergeProjects(
   projects: Project[],
   plan: MergePlan,
@@ -135,25 +156,15 @@ export async function mergeProjects(
   const channel = new Channel<MergeProgressEvent>();
   channel.onmessage = opts.onProgress;
 
-  const prefixes = uniquePrefixes(projects);
-  const images = projects.flatMap((p, k) => manifestFor(p, plan.classMaps[k], prefixes[k]));
+  const { project, copies } = buildMerge(projects, plan);
 
   // The command returns the new project's folder path directly (empty string
   // if cancelled), which avoids racing the Done channel event against the
   // invoke resolving.
-  const outPath = await invoke<string>('merge_projects', {
-    req: {
-      outDir: opts.outDir,
-      projectName: plan.projectName,
-      projectId: plan.projectId,
-      classes: plan.mergedClasses,
-      pixelPitch: plan.pixelPitch,
-      createdAt: new Date().toISOString(),
-      images,
-    },
+  return await invoke<string>('merge_projects', {
+    req: { outDir: opts.outDir, project, copies },
     onEvent: channel,
   });
-  return outPath;
 }
 
 export async function cancelMerge(): Promise<void> {

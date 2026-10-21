@@ -29,7 +29,7 @@
         { keys: ['0'], desc: 'Set class 10' },
         { keys: ['Arrows'], desc: 'Nudge selection 1 px (whole group if multi)' },
         { keys: ['Shift', 'Arrows'], sep: '+', desc: 'Nudge selection by 10 px' },
-        { keys: ['Del'], desc: 'Delete selected box(es)' },
+        { keys: ['Del', 'Backspace'], sep: '/', desc: 'Delete selected box(es)' },
         { keys: ['Shift', 'D'], sep: '+', desc: 'Remove current image from project (undoable)' },
         { keys: ['X'], desc: 'Toggle needs re-review' },
         { keys: ['Ctrl', 'Z'], sep: '+', desc: 'Undo (chronological)' },
@@ -41,7 +41,7 @@
         { keys: ['M'], desc: 'Toggle measure mode (stays on until pressed again)' },
         { keys: ['Drag'], desc: 'Draw a width line on the box it starts on' },
         { keys: ['Click'], desc: 'Select a box to measure' },
-        { keys: ['Del'], desc: 'Clear the selected box\u2019s measurement' },
+        { keys: ['Del', 'Backspace'], sep: '/', desc: 'Clear the selected box\u2019s measurement' },
       ],
     },
     {
