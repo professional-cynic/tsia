@@ -43,6 +43,19 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      # Release notes: subjects of the two most recent commits.
+      - name: Collect changes
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo 'changes<<EOF'
+            git log -2 --format='- %s'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -89,6 +102,10 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "TSIA ${{ github.ref_name }}"
           releaseBody: |
+            ## Changes
+
+            ${{ steps.notes.outputs.changes }}
+
             ## Installation
 
             **Windows**: Download the `.exe` and run it. SmartScreen may
@@ -106,5 +123,5 @@ jobs:
             when a new version is available.
           releaseDraft: true        # publish manually after sanity check
           prerelease: false
-          generateReleaseNotes: true
+          generateReleaseNotes: false
           args: ${{ matrix.args }}
