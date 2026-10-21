@@ -117,7 +117,7 @@
       // export reads the array element. Reading it back unifies them.
       const stored = app.projects[app.projects.length - 1];
       app.resetAnnotationState(stored);
-      app.setImageIndex(0, false);
+      app.setImageIndex(0);
       app.screen = 'annotate';
     } catch (e) {
       createError = e instanceof Error ? e.message : String(e);

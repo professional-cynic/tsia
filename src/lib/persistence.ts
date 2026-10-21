@@ -1,5 +1,5 @@
 import {
-  readTextFile, writeTextFile, exists, mkdir, readDir, remove,
+  readTextFile, writeTextFile, exists, remove,
   BaseDirectory,
 } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
@@ -15,8 +15,6 @@ const PROJECT_FILE = 'tsia-project.json';
 // that subdir (and only that subdir) is in the fs scope — the AppData root
 // itself is not, so a registry at the root would be a 'forbidden path'.
 const REGISTRY = 'projects/registry.json';
-const LEGACY_DIR = 'projects';              // old per-id files lived here
-const LEGACY_BACKUP = 'projects/_backup';   // migrated originals moved here
 
 // A folder path is safe to grant scope to / write into only if it's absolute
 // and has no '..' traversal. Used for both registry entries and project-file
@@ -120,7 +118,7 @@ async function unregisterFolder(dir: string): Promise<void> {
   await writeRegistry(folders.filter(f => f !== dir));
 }
 
-// ── Validation (unchanged logic) ───────────────────────────
+// ── Validation ─────────────────────────────────────────────
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -211,70 +209,9 @@ async function projectFilePath(imageDirPath: string): Promise<string> {
   return await join(imageDirPath, PROJECT_FILE);
 }
 
-// ── Migration: old app-data projects → image folders ───────
-//
-// Pre-this-version, projects lived at $APPDATA/projects/<id>.json with the
-// image dir referenced inside. We move each into <imageDir>/tsia-project.json,
-// register the folder, and back up the original under $APPDATA/projects-backup
-// (kept, not deleted). Runs once; idempotent (skips folders already migrated).
-
-async function migrateLegacyProjects(): Promise<void> {
-  let entries;
-  try {
-    if (!(await exists(LEGACY_DIR, { baseDir: BaseDirectory.AppData }))) return;
-    entries = await readDir(LEGACY_DIR, { baseDir: BaseDirectory.AppData });
-  } catch {
-    return;
-  }
-  if (!entries.length) return;
-
-  await mkdir(LEGACY_BACKUP, { baseDir: BaseDirectory.AppData, recursive: true }).catch(() => {});
-
-  for (const entry of entries) {
-    if (!entry.name?.endsWith('.json')) continue;
-    if (entry.name === 'registry.json') continue; // our own registry, not a project
-    try {
-      const text = await readTextFile(`${LEGACY_DIR}/${entry.name}`, { baseDir: BaseDirectory.AppData });
-      const project = parseProject(JSON.parse(text));
-      if (!project) continue;
-
-      await allowFolder(project.imageDirPath);
-      const dest = await projectFilePath(project.imageDirPath);
-      // Don't clobber a project file that already exists in the folder.
-      const destExists = await exists(dest).catch(() => false);
-      if (!destExists) {
-        await writeTextFile(dest, JSON.stringify(project, null, 2));
-      }
-      await registerFolder(project.imageDirPath);
-
-      // Back up the original before removing it from the live legacy dir
-      // (so migration doesn't repeat). Copy-then-verify-then-remove: we write
-      // the backup with writeTextFile (known to work under the projects scope,
-      // unlike the two-baseDir rename which was being denied), confirm it
-      // landed, and only then delete the original. If the backup can't be
-      // confirmed, we KEEP the original — never delete an un-backed-up file.
-      const backupRel = `${LEGACY_BACKUP}/${entry.name}`;
-      let backedUp = false;
-      try {
-        await writeTextFile(backupRel, text, { baseDir: BaseDirectory.AppData });
-        backedUp = await exists(backupRel, { baseDir: BaseDirectory.AppData }).catch(() => false);
-      } catch (e) {
-        console.warn(`Could not back up ${entry.name}; keeping the original in place:`, e);
-      }
-      if (backedUp) {
-        await remove(`${LEGACY_DIR}/${entry.name}`, { baseDir: BaseDirectory.AppData }).catch(() => {});
-      }
-    } catch (e) {
-      console.warn(`Migration of ${entry.name} failed; leaving it in place:`, e);
-    }
-  }
-}
-
 // ── API ────────────────────────────────────────────────────
 
 export async function loadAllProjects(): Promise<Project[]> {
-  await migrateLegacyProjects();
-
   const folders = await readRegistry();
   const projects: Project[] = [];
   const stillValid: string[] = [];

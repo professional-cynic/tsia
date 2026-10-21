@@ -163,7 +163,7 @@
     }
     await allowAssetDir(p.imageDirPath);
     app.resetAnnotationState(p);
-    app.setImageIndex(0, false);
+    app.setImageIndex(0);
     app.screen = 'annotate';
   }
 
@@ -200,7 +200,7 @@
       const p = relocateTarget;
       relocateTarget = null;
       app.resetAnnotationState(p);
-      app.setImageIndex(0, false);
+      app.setImageIndex(0);
       app.screen = 'annotate';
       return;
     }
@@ -245,7 +245,7 @@
     await allowAssetDir(project.imageDirPath);
     reconcileState = null;
     app.resetAnnotationState(project);
-    app.setImageIndex(0, false);
+    app.setImageIndex(0);
     app.screen = 'annotate';
   }
 

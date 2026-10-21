@@ -1,7 +1,7 @@
 {
   "name": "TSIA",
   "version": "0.5.1",
-  "description": "",
+  "description": "Toni's Simple Image Annotator",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -12,12 +12,11 @@
     "tauri": "tauri",
     "bump": "node scripts/bump-version.mjs"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0",
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-fs": "^2.5.1",
-    "@tauri-apps/plugin-opener": "^2.5.4",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1"
   },

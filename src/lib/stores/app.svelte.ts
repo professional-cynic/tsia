@@ -278,7 +278,7 @@ class AppState {
     this.scheduleSave();
   }
 
-  setImageIndex(idx: number, _pushHistory = true) {
+  setImageIndex(idx: number) {
     if (!this.current || idx < 0 || idx >= this.current.images.length) return;
     this.imgIndex = idx;
     this.selectedBox = null;
@@ -311,7 +311,7 @@ class AppState {
     const filtered = this.filteredImages;
     if (filtered.length === 0) return;
     if (filtered.some(({ i }) => i === this.imgIndex)) return;
-    this.setImageIndex(filtered[0].i, false);
+    this.setImageIndex(filtered[0].i);
   }
 
   navigateImage(delta: number) {
@@ -324,16 +324,16 @@ class AppState {
       // Step to the nearest filtered image in the direction of travel.
       if (delta > 0) {
         const next = filtered.find(({ i }) => i > this.imgIndex);
-        this.setImageIndex((next ?? filtered[0]).i, false);
+        this.setImageIndex((next ?? filtered[0]).i);
       } else {
         const prev = [...filtered].reverse().find(({ i }) => i < this.imgIndex);
-        this.setImageIndex((prev ?? filtered[filtered.length - 1]).i, false);
+        this.setImageIndex((prev ?? filtered[filtered.length - 1]).i);
       }
       return;
     }
     const nextPos = pos + delta;
     if (nextPos < 0 || nextPos >= filtered.length) return; // at an end; stay put
-    this.setImageIndex(filtered[nextPos].i, false);
+    this.setImageIndex(filtered[nextPos].i);
   }
 
   // ── Measurement mode ─────────────────────────────────────
@@ -667,7 +667,7 @@ class AppState {
     if (filtered.length === 0) return;                    // nothing to move to
     const next = filtered.find(({ i }) => i > fromIdx);
     const prev = [...filtered].reverse().find(({ i }) => i < fromIdx);
-    this.setImageIndex((next ?? prev ?? filtered[0]).i, false);
+    this.setImageIndex((next ?? prev ?? filtered[0]).i);
   }
 
   /// Toggle review state on an arbitrary image (not necessarily the current

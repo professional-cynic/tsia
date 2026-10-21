@@ -6,7 +6,6 @@ export const CLASS_COLORS = [
 
 export const MAX_CLASSES = 10; // bounded by the 1–9, 0 number-key shortcuts
 export const MAX_UNDO = 50;
-export const MAX_NAV = 100;
 export const HANDLE_SIZE = 7;
 export const AUTOSAVE_DELAY = 1000; // ms debounce
 
